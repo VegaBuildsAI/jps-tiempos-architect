@@ -45,8 +45,27 @@ Example — base ₡200, rev ₡200: `EV = −₡126.67 / draw`
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10+ (verified on 3.12.7)
 - No external dependencies — stdlib only (`json`, `math`, `urllib`, `argparse`, `statistics`)
+- Cross-platform: macOS · Linux · Windows
+
+> On macOS/Linux the interpreter is usually `python3` (not `python`). Substitute accordingly in the commands below, or set an alias.
+
+---
+
+## Quick verify (smoke test)
+
+After cloning, run this sequence to confirm everything works end-to-end:
+
+```bash
+python3 jps_edge_tool.py fetch --mode last                    # ~3s
+python3 jps_edge_tool.py fetch --mode history --days 30       # ~10s
+python3 jps_edge_tool.py analyze
+python3 jps_edge_tool.py bet --budget 5000 --n 5 --profile balanced
+python3 jps_edge_tool.py audit --exacto 47 --reventada SI
+```
+
+Each step prints a formatted report and writes its JSON output to the project root. If `fetch` errors out, the JPS API is unreachable from your network — the rest of the pipeline still works with any existing `historical_data.json`.
 
 ---
 
@@ -124,7 +143,30 @@ audit_result.json         ← Post-draw audit
 
 ## Dashboard
 
-Open `jps_console_v2.html` in any modern browser. Upload a `historical_data.json` file to run analysis client-side, or connect to `jps_server.py` for live data.
+Two ways to use the dashboard:
+
+**A) Standalone (no server)** — open `jps_console_v2.html` directly in any modern browser and upload `historical_data.json` + `last_result.json` via the file picker. All computation happens in JavaScript.
+
+**B) Live server** — start the local HTTP server and use the auto pipeline:
+
+```bash
+python3 jps_server.py           # default port 7788
+python3 jps_server.py 8080      # custom port
+```
+
+The browser opens automatically at `http://localhost:7788`. Press Ctrl+C to stop. The server proxies the JPS API and runs the full pipeline (fetch → analyze → bet → simulate) on demand.
+
+---
+
+## Troubleshooting
+
+| Issue | Cause / Fix |
+|---|---|
+| `command not found: python` | On macOS/Linux use `python3` instead, or alias `python=python3` in your shell rc |
+| `analyze` fails with "historical_data.json no encontrado" | Run `fetch --mode history --days 60` first |
+| `jps_accumulate.py` times out | The API call fetches 180 days; flaky on slow connections — retry, or use `jps_edge_tool.py fetch` directly with a smaller `--days` |
+| Server port already in use | Pass a different port: `python3 jps_server.py 8080` |
+| `audit` says "No hay tickets" | Run `bet` first to create `input.json` / `output.json` |
 
 ---
 
