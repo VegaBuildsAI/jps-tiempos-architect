@@ -42,6 +42,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 PORT     = int(sys.argv[1]) if len(sys.argv) > 1 else 7788
 JPS_BASE = "https://integration.jps.go.cr"
 HERE     = os.path.dirname(os.path.abspath(__file__))
+# DATA_DIR: dónde viven los datos persistentes. En Railway será /data (volume).
+# Default a HERE para correr local sin cambios.
+DATA_DIR = os.environ.get("JPS_DATA_DIR", HERE)
+if DATA_DIR != HERE and not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
 
 # In-memory state (persists while server runs)
 STATE = {
@@ -424,9 +429,32 @@ def pipeline(params):
 # ─── HTTP SERVER ───────────────────────────────────────────────────────────────
 CORS = {
     "Access-Control-Allow-Origin":  "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
+
+# Basic Auth opcional via env vars. Si BOTH están seteadas, se requiere auth.
+# Si AMBAS están vacías, el server queda abierto (modo local).
+BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "").strip()
+BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "").strip()
+BASIC_AUTH_ENABLED = bool(BASIC_AUTH_USER and BASIC_AUTH_PASS)
+
+
+def _check_basic_auth(headers) -> bool:
+    """Devuelve True si está autenticado o auth está desactivado."""
+    if not BASIC_AUTH_ENABLED:
+        return True
+    import base64
+    auth_header = headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        return False
+    try:
+        encoded = auth_header.split(" ", 1)[1].strip()
+        decoded = base64.b64decode(encoded).decode("utf-8")
+        user, _, pw = decoded.partition(":")
+        return user == BASIC_AUTH_USER and pw == BASIC_AUTH_PASS
+    except Exception:
+        return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -450,18 +478,146 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_file(self, abs_path, content_type):
+        """Sirve un archivo arbitrario del proyecto (HTML, CSS, PNG, etc.)."""
+        if not os.path.exists(abs_path):
+            self.send_json({"error": f"Not found: {os.path.basename(abs_path)}"}, 404)
+            return
+        with open(abs_path, "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        for k, v in CORS.items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):
         self.send_response(200)
         for k, v in CORS.items():
             self.send_header(k, v)
         self.end_headers()
 
+    def do_POST(self):
+        if not self._require_auth():
+            return
+        parsed = urllib.parse.urlparse(self.path)
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            body_raw = self.rfile.read(length) if length else b""
+            payload = json.loads(body_raw.decode("utf-8")) if body_raw else {}
+        except Exception as e:
+            self.send_json({"error": f"invalid JSON body: {e}"}, 400)
+            return
+
+        try:
+            if parsed.path == "/api/commit":
+                pred_id = payload.get("id")
+                bet_per_ticket = int(payload.get("bet_per_ticket", 0))
+                if not pred_id or bet_per_ticket < 100:
+                    self.send_json({"error": "id y bet_per_ticket (>=100) requeridos"}, 400)
+                    return
+                record = {
+                    "id": pred_id,
+                    "supersedes_status": "pending",
+                    "status": "committed",
+                    "actual_bet_per_ticket": bet_per_ticket,
+                    "committed_at": datetime.now().isoformat(),
+                }
+                with open(os.path.join(DATA_DIR, "predictions_log.jsonl"), "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                self.send_json({"ok": True, "record": record})
+
+            elif parsed.path == "/api/skip":
+                pred_id = payload.get("id")
+                if not pred_id:
+                    self.send_json({"error": "id requerido"}, 400)
+                    return
+                record = {
+                    "id": pred_id,
+                    "supersedes_status": "pending",
+                    "status": "skipped",
+                    "skipped_at": datetime.now().isoformat(),
+                }
+                with open(os.path.join(DATA_DIR, "predictions_log.jsonl"), "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                self.send_json({"ok": True, "record": record})
+
+            else:
+                self.send_json({"error": "Not found"}, 404)
+
+        except Exception as e:
+            import traceback
+            self.send_json({"error": str(e), "trace": traceback.format_exc()[-1500:]}, 500)
+
+    def _require_auth(self) -> bool:
+        """Si auth está enabled y falla, manda 401 y devuelve False. True si OK."""
+        if _check_basic_auth(self.headers):
+            return True
+        body = b'{"error": "authentication required"}'
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="JPS Tiempos Lab"')
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        for k, v in CORS.items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def do_GET(self):
+        # Permitir healthcheck SIN auth (necesario para Railway healthchecks)
+        parsed_pre = urllib.parse.urlparse(self.path)
+        if parsed_pre.path != "/api/status" and not self._require_auth():
+            return
         parsed = urllib.parse.urlparse(self.path)
         params = dict(urllib.parse.parse_qsl(parsed.query))
         try:
             if parsed.path == "/":
-                self.send_html(DASHBOARD_HTML)
+                # Nuevo dashboard editorial (Preset 2 Coreintel). El antiguo
+                # console_v2.html sigue en el repo para uso analítico avanzado
+                # pero el server sirve por default el nuevo.
+                dash_path = os.path.join(HERE, "dashboard.html")
+                if os.path.exists(dash_path):
+                    self.send_file(dash_path, "text/html; charset=utf-8")
+                else:
+                    self.send_html(DASHBOARD_HTML)  # fallback al embedded
+
+            elif parsed.path.startswith("/assets/"):
+                # Sirve assets de marca (CSS, logo). Path tipo /assets/brand/preset-editorial.css
+                rel = parsed.path.lstrip("/")
+                abs_path = os.path.join(HERE, rel)
+                # Validar que sigue dentro del HERE para evitar path traversal
+                if not os.path.abspath(abs_path).startswith(os.path.abspath(HERE)):
+                    self.send_json({"error": "forbidden"}, 403)
+                else:
+                    ct = "application/octet-stream"
+                    if rel.endswith(".css"): ct = "text/css; charset=utf-8"
+                    elif rel.endswith(".png"): ct = "image/png"
+                    elif rel.endswith(".svg"): ct = "image/svg+xml"
+                    elif rel.endswith(".js"): ct = "application/javascript"
+                    self.send_file(abs_path, ct)
+
+            elif parsed.path == "/predictions_log.jsonl":
+                # Sirve el JSONL para que dashboard.html lo lea con fetch()
+                p = os.path.join(DATA_DIR, "predictions_log.jsonl")
+                if os.path.exists(p):
+                    self.send_file(p, "application/x-ndjson; charset=utf-8")
+                else:
+                    self.send_file(p, "text/plain")  # 404 via send_file
+
+            elif parsed.path == "/backtest_report.json":
+                p = os.path.join(DATA_DIR, "backtest_report.json")
+                self.send_file(p, "application/json; charset=utf-8")
+
+            elif parsed.path == "/historical_data.json":
+                p = os.path.join(DATA_DIR, "historical_data.json")
+                self.send_file(p, "application/json; charset=utf-8")
+
+            elif parsed.path == "/bandit_state.json":
+                p = os.path.join(DATA_DIR, "bandit_state.json")
+                self.send_file(p, "application/json; charset=utf-8")
 
             elif parsed.path == "/api/status":
                 self.send_json({
@@ -1404,12 +1560,117 @@ function renderArchitect(top25,anom,output,budget,profile){
 """
 
 
+# ─── AUTO SCHEDULER ────────────────────────────────────────────────────────────
+# Schedule diario: predict adaptive 50min antes de cada sorteo, fetch+reconcile
+# 30-60min después. Horarios JPS oficiales: 12:55 / 16:30 / 19:30.
+SCHEDULE = [
+    # (hour, minute, kind, args)
+    (12,  5, "predict",         ["--session", "manana",     "--strategy", "adaptive", "--force"]),
+    (13, 30, "fetch_reconcile", None),
+    (15, 40, "predict",         ["--session", "mediaTarde", "--strategy", "adaptive", "--force"]),
+    (17,  0, "fetch_reconcile", None),
+    (18, 40, "predict",         ["--session", "tarde",      "--strategy", "adaptive", "--force"]),
+    (20,  0, "fetch_reconcile", None),
+]
+_last_run_per_slot = {}  # {(h, m, kind): date} → evita ejecutar 2 veces el mismo slot el mismo día
+
+
+def _sched_log(msg):
+    """Log con timestamp para debugging del scheduler."""
+    print(f"[SCHED {datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def _run_predict_sched(args):
+    cmd = [sys.executable, os.path.join(HERE, "jps_predict.py")] + args
+    _sched_log(f"→ predict: {' '.join(args)}")
+    try:
+        r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=120)
+        if r.returncode == 0:
+            _sched_log(f"✓ predict ok")
+        else:
+            # Capturar AMBOS stdout y stderr — el predict imprime errores
+            # a stdout también (ej. "ya existe predicción pending para X")
+            err_combined = (r.stderr or "") + "\n" + (r.stdout or "")
+            _sched_log(f"✗ predict failed (rc={r.returncode})")
+            for line in err_combined.strip().split("\n")[-10:]:
+                if line.strip():
+                    _sched_log(f"    {line}")
+    except subprocess.TimeoutExpired:
+        _sched_log("✗ predict timeout 120s")
+    except Exception as e:
+        _sched_log(f"✗ predict error: {e}")
+
+
+def _run_fetch_reconcile_sched():
+    # CRÍTICO: usar --days 180 porque fetch SOBREESCRIBE historical_data.json
+    # (no es acumulativo). Si usamos --days 7, perdemos 173 días de histórico
+    # cada vez. Eso rompe estrategias que necesitan mucha data (weekday_specific
+    # necesita ≥30 sorteos por weekday = ≥210 sorteos total).
+    _sched_log("→ fetch --mode history --days 180 + reconcile")
+    try:
+        r1 = subprocess.run(
+            [sys.executable, os.path.join(HERE, "jps_edge_tool.py"), "fetch", "--mode", "history", "--days", "180"],
+            cwd=HERE, capture_output=True, text=True, timeout=120,
+        )
+        if r1.returncode != 0:
+            _sched_log(f"✗ fetch failed: {r1.stderr[-200:]}")
+            return
+        r2 = subprocess.run(
+            [sys.executable, os.path.join(HERE, "jps_reconcile.py")],
+            cwd=HERE, capture_output=True, text=True, timeout=120,
+        )
+        if r2.returncode == 0:
+            # extract última línea útil del stdout
+            lines = [l for l in r2.stdout.split("\n") if l.strip()]
+            tail = lines[-3:] if len(lines) >= 3 else lines
+            _sched_log("✓ reconcile ok")
+            for l in tail:
+                _sched_log(f"    {l}")
+        else:
+            _sched_log(f"✗ reconcile failed: {r2.stderr[-200:]}")
+    except subprocess.TimeoutExpired:
+        _sched_log("✗ fetch+reconcile timeout")
+    except Exception as e:
+        _sched_log(f"✗ fetch+reconcile error: {e}")
+
+
+def _scheduler_loop():
+    import time as _time
+    _sched_log(f"Scheduler iniciado · {len(SCHEDULE)} slots/día")
+    for h, m, kind, _args in SCHEDULE:
+        _sched_log(f"  {h:02d}:{m:02d}  →  {kind}")
+    while True:
+        try:
+            now = datetime.now()
+            today = now.date()
+            for h, m, kind, args in SCHEDULE:
+                if now.hour == h and now.minute == m:
+                    key = (h, m, kind)
+                    if _last_run_per_slot.get(key) == today:
+                        continue
+                    _last_run_per_slot[key] = today
+                    if kind == "predict":
+                        _run_predict_sched(args)
+                    elif kind == "fetch_reconcile":
+                        _run_fetch_reconcile_sched()
+        except Exception as e:
+            _sched_log(f"loop error: {e}")
+        _time.sleep(45)  # check ~cada 45s (no nos saltamos un minuto)
+
+
+def start_scheduler():
+    import threading
+    t = threading.Thread(target=_scheduler_loop, daemon=True)
+    t.start()
+
+
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     import sys
     if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") not in ("utf8", "utf16"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     server = HTTPServer(("127.0.0.1", PORT), Handler)
+    start_scheduler()
     print(f"""
 +--------------------------------------------------------------+
 |       JPS TIEMPOS LAB -- Dashboard activo  v1.0             |

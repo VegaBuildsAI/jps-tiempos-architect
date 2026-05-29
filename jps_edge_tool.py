@@ -37,8 +37,8 @@ from typing import List, Optional, Dict, Tuple
 # CONSTANTS
 # ─────────────────────────────────────────────
 BASE_URL     = "https://integration.jps.go.cr"
-EXACTO_MULT  = 70
-REV_MULT     = 200
+EXACTO_MULT  = 70   # Per reglas oficiales JPS Costa Rica
+REV_MULT     = 200  # Reventados (condicional a acertar Exacto + bola Reventada)
 P_EXACTO     = 1 / 100
 P_REV        = 1 / 3
 N_MONTE      = 20_000
@@ -46,9 +46,21 @@ SEED_DEFAULT = 42
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# DATA_DIR: dónde viven los archivos de datos (JSONL, JSON, reports).
+# Local: mismo dir que el código (HERE). Railway/container: /data (env var).
+# Esto permite que el código corra IDÉNTICO local y en deploy persistente.
+DATA_DIR = os.environ.get("JPS_DATA_DIR", HERE)
+if DATA_DIR != HERE and not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
 
 def path(filename: str) -> str:
-    return os.path.join(HERE, filename)
+    """Resuelve la ruta de un archivo de DATOS.
+
+    Si JPS_DATA_DIR está configurada (Railway), usa ese directorio.
+    Si no, usa el directorio del código (modo local clásico).
+    """
+    return os.path.join(DATA_DIR, filename)
 
 
 def save_json(data: dict, filename: str):
@@ -275,8 +287,17 @@ def _z_score(observed: int, total: int, p_expected: float) -> float:
     return round((p_hat - p_expected) / se, 4)
 
 
-def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"):
-    """Análisis estadístico. Acepta sorteos pre-filtrados via _draws."""
+def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS",
+                _no_save: bool = False, _mc_iterations: Optional[int] = None) -> Optional[dict]:
+    """Análisis estadístico. Acepta sorteos pre-filtrados via _draws.
+
+    _no_save: si True, no escribe analysis_report.json (útil para callers
+              programáticos como el backtester que invocan cientos de veces).
+    _mc_iterations: override del Monte Carlo interno para los IC de Reventada.
+              Default = N_MONTE (20,000). Útil bajarlo a ~200 desde el backtester
+              porque esos IC no afectan las decisiones del bet engine.
+    Retorna el report dict (o None si no se pudo generar).
+    """
     session_tag = f" [{_label}]" if _label != "TODOS" else ""
     print(f"\n═══ ANÁLISIS ESTADÍSTICO{session_tag} ═══")
     if _draws is not None:
@@ -408,15 +429,19 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
     p95_freq  = all_freqs[int(0.95 * 100)]
 
     # ── Monte Carlo Reventada
+    n_mc = _mc_iterations if _mc_iterations is not None else N_MONTE
     random.seed(SEED_DEFAULT)
-    mc_rev_rates = []
-    for _ in range(N_MONTE):
-        mc_hits = sum(1 for _ in range(valid) if random.randint(1, 3) == 1)
-        mc_rev_rates.append(mc_hits / valid)
-    mc_mean  = sum(mc_rev_rates) / N_MONTE
-    mc_std   = math.sqrt(sum((x - mc_mean)**2 for x in mc_rev_rates) / (N_MONTE - 1))
-    mc_lo    = sorted(mc_rev_rates)[int(0.025 * N_MONTE)]
-    mc_hi    = sorted(mc_rev_rates)[int(0.975 * N_MONTE)]
+    if n_mc > 1:
+        mc_rev_rates = []
+        for _ in range(n_mc):
+            mc_hits = sum(1 for _ in range(valid) if random.randint(1, 3) == 1)
+            mc_rev_rates.append(mc_hits / valid)
+        mc_mean  = sum(mc_rev_rates) / n_mc
+        mc_std   = math.sqrt(sum((x - mc_mean)**2 for x in mc_rev_rates) / (n_mc - 1))
+        mc_lo    = sorted(mc_rev_rates)[int(0.025 * n_mc)]
+        mc_hi    = sorted(mc_rev_rates)[int(0.975 * n_mc)]
+    else:
+        mc_mean = mc_std = mc_lo = mc_hi = 0.0
 
     # Interpretation
     significance = "SIGNIFICATIVO (p < 0.05)" if p_num < 0.05 else "dentro de variabilidad esperada"
@@ -544,8 +569,10 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
         ],
         "disclaimer": "Todos los números tienen exactamente la misma probabilidad en un sistema aleatorio. No se garantiza ningún resultado.",
     }
-    save_json(report, "analysis_report.json")
+    if not _no_save:
+        save_json(report, "analysis_report.json")
     print(f"\n  DISCLAIMER: {report['disclaimer']}\n")
+    return report
 
 
 def cmd_session_analyze(args):
@@ -942,6 +969,32 @@ def cmd_simulate(args):
 # SECTION 5 — AUDIT ENGINE
 # ─────────────────────────────────────────────
 
+def payout_ticket(num_exacto: int, base: int, rev: int,
+                  drawn_exacto: int, drawn_reventada: str) -> dict:
+    """Calcula el outcome de un ticket dado un resultado de sorteo.
+
+    Pura — sin I/O, sin globals. Reusable desde backtester, reconciler, etc.
+    drawn_reventada: "SI" o "NO".
+    Retorna: hit_exacto, exacto_win, rev_win, recuperado, cost, neto, roi.
+    """
+    cost = base + rev
+    hit = (num_exacto == drawn_exacto)
+    exacto_win = EXACTO_MULT * base if hit else 0
+    rev_win    = REV_MULT * rev if (hit and drawn_reventada == "SI") else 0
+    recuperado = exacto_win + rev_win
+    neto       = recuperado - cost
+    roi        = neto / cost if cost else 0
+    return {
+        "hit_exacto": hit,
+        "exacto_win": exacto_win,
+        "rev_win": rev_win,
+        "recuperado": recuperado,
+        "cost": cost,
+        "neto": neto,
+        "roi": roi,
+    }
+
+
 def cmd_audit(args):
     print("\n═══ AUDITORÍA ═══")
     resultado_exacto  = int(args.exacto.lstrip("0") or "0")
@@ -975,14 +1028,13 @@ def cmd_audit(args):
         num  = int(t.get("num_exacto", t.get("numero", 0)))
         base = int(t.get("base", 0))
         rev  = int(t.get("rev", 0))
-        cost = base + rev
 
-        hit = (num == resultado_exacto)
-        exacto_win = EXACTO_MULT * base if hit else 0
-        rev_win    = REV_MULT * rev if (hit and resultado_rev == "SI") else 0
-        recuperado = exacto_win + rev_win
-        neto       = recuperado - cost
-        roi        = neto / cost if cost else 0
+        result = payout_ticket(num, base, rev, resultado_exacto, resultado_rev)
+        cost       = result["cost"]
+        hit        = result["hit_exacto"]
+        recuperado = result["recuperado"]
+        neto       = result["neto"]
+        roi        = result["roi"]
 
         total_apostado   += cost
         total_recuperado += recuperado
