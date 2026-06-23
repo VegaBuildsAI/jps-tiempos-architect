@@ -1673,8 +1673,75 @@ function refreshLdDateLabel(){
   document.getElementById('ld-date-label').textContent=cutoffLabel+' (predic. '+targetDate+')';
 }
 
+// ── AUTO-ENTRY: corre todo end-to-end al entrar ───────────────────────────────
+// 1) Pide al server correr el pipeline (fetch JPS → escribe historical_data.json),
+//    cacheado ~10 min.  2) Carga los draws reales en S.draws.  3) runPipeline()
+//    renderiza las 6 pestañas.  Si no hay server (abierto como archivo), no hace
+//    nada y deja los controles manuales (Demo / cargar archivo / ▶ Pipeline).
+function aeOverlay(){
+  let el=document.getElementById('ae-overlay');if(el)return el;
+  el=document.createElement('div');el.id='ae-overlay';
+  el.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(13,17,23,.93);color:#e6edf3;display:flex;align-items:center;justify-content:center;font-family:-apple-system,"Segoe UI",sans-serif;backdrop-filter:blur(3px)';
+  el.innerHTML='<div style="width:min(560px,92vw);background:#161b22;border:1px solid #283041;border-radius:14px;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="width:13px;height:13px;border-radius:50%;border:2px solid #0F6E56;border-top-color:transparent;display:inline-block;animation:aespin .8s linear infinite"></span><b style="font-size:15px">Consultando el API de JPS…</b></div>'
+    +'<div style="font-size:11.5px;color:#8b949e;margin-bottom:14px">Descargando el histórico y el último resultado en vivo. Puede tardar hasta ~1 min.</div>'
+    +'<pre id="ae-log" style="margin:0;max-height:230px;overflow:auto;font-size:11px;line-height:1.55;color:#9fb0c0;background:#0d1117;border:1px solid #283041;border-radius:9px;padding:11px 13px;white-space:pre-wrap"></pre></div>'
+    +'<style>@keyframes aespin{to{transform:rotate(360deg)}}</style>';
+  document.body.appendChild(el);return el;
+}
+function aeLog(lines){const p=document.getElementById('ae-log');if(p&&Array.isArray(lines)){p.textContent=lines.join('\n');p.scrollTop=p.scrollHeight;}}
+function aeClose(){const el=document.getElementById('ae-overlay');if(el)el.remove();}
+async function aeFetchJSON(u){try{const r=await fetch(u);if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+
+async function autoEntry(){
+  // Solo cuando se sirve por http(s); abierto como archivo local → controles manuales.
+  if(!location.protocol.startsWith('http'))return;
+  try{
+    const kick=await aeFetchJSON('/api/auto/run');
+    if(kick===null)return; // no hay server/endpoint → modo manual
+    let result=(kick.status==='done')?kick.result:null;
+    if(!result){
+      aeOverlay();
+      for(let i=0;i<80;i++){            // ~120s techo (80 × 1.5s)
+        await sleep(1500);
+        const st=await aeFetchJSON('/api/auto');
+        if(st&&st.log)aeLog(st.log);
+        if(!st||st.status==='done'||st.status==='error'){result=st&&st.result;break;}
+      }
+    }
+    // Cargar draws reales escritos por el server (mismo formato que handleHist).
+    const raw=await aeFetchJSON('/historical_data.json');
+    if(raw){
+      const draws=parseDraws(raw);
+      if(draws.length){
+        S.draws=draws;
+        document.getElementById('slot-hist').classList.add('loaded');
+        document.getElementById('fn-hist').textContent='historical_data.json · JPS en vivo';
+        document.getElementById('fs-hist').textContent=draws.length.toLocaleString()+' sorteos';
+      }
+    }
+    // Último resultado desde el resultado del pipeline.
+    if(result&&result.last_result){
+      S.lastResult=result.last_result;
+      try{renderLast(result.last_result);}catch(e){}
+      const sl=document.getElementById('slot-last');if(sl)sl.classList.add('loaded');
+      const fn=document.getElementById('fn-last');if(fn)fn.textContent='last_result.json · JPS en vivo';
+      const fs=document.getElementById('fs-last');if(fs)fs.textContent='Cargado ✓';
+    }
+    aeClose();
+    if(S.draws&&S.draws.length){
+      await runPipeline();   // renderiza las 6 pestañas con datos reales
+    }else{
+      log('No se pudo cargar el histórico del server — usá Demo o cargá un archivo.','lw');
+    }
+  }catch(e){
+    aeClose();
+    // Silencioso: dejamos los controles manuales disponibles.
+  }
+}
+
 // Initialize on page load
-window.addEventListener('DOMContentLoaded',()=>{refreshLdDateLabel();updateLdLabels();});
+window.addEventListener('DOMContentLoaded',()=>{refreshLdDateLabel();updateLdLabels();autoEntry();});
 
 function statsHtml(top25,anom,totalValid){
   const top5=(top25||[]).slice(0,5).map(n=>`<strong>${n.num_str}</strong>(${n.total})`).join(' \xb7 ');

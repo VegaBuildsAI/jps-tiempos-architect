@@ -26,6 +26,7 @@ import json
 import math
 import os
 import random
+import secrets
 import subprocess
 import sys
 import threading
@@ -54,7 +55,20 @@ STATE = {
     "auto_status": "idle",   # idle | running | done | error
     "auto_log":    [],
     "auto_result": None,
+    "auto_started_at": None,  # epoch segundos de la última corrida auto completada
 }
+
+# Auto-pipeline: lock para evitar corridas concurrentes + TTL de caché (segundos).
+# Si alguien entra y el pipeline corrió hace < TTL, se reusa el resultado en vez
+# de re-consultar el API JPS en cada entrada.
+_AUTO_LOCK = threading.Lock()
+AUTO_CACHE_TTL = int(os.environ.get("JPS_AUTO_TTL", "600"))  # 10 min por defecto
+
+# Token de sesión para el login screen. Se regenera en cada arranque del server
+# (reiniciar = cerrar todas las sesiones). Un solo token compartido es suficiente
+# para esta app de pocos usuarios.
+SESSION_COOKIE = "jps_session"
+SESSION_TOKEN  = secrets.token_urlsafe(32)
 
 # ─── HELPERS ───────────────────────────────────────────────────────────────────
 def jps_get(endpoint, timeout=20):
@@ -426,6 +440,69 @@ def pipeline(params):
     }
 
 
+# ─── AUTO PIPELINE (run-on-entry, background + caché TTL) ──────────────────────
+def _auto_age():
+    """Segundos desde la última corrida completada, o None si nunca corrió."""
+    ts = STATE.get("auto_started_at")
+    return None if ts is None else round(time.time() - ts, 1)
+
+
+def _auto_is_fresh():
+    """True si hay un resultado 'done' reciente dentro del TTL → se puede reusar."""
+    ts = STATE.get("auto_started_at")
+    return (
+        ts is not None
+        and STATE["auto_status"] == "done"
+        and (time.time() - ts) < AUTO_CACHE_TTL
+    )
+
+
+def _run_auto_pipeline(params):
+    """Corre el pipeline end-to-end + reconcile en un thread de fondo."""
+    try:
+        STATE["auto_status"] = "running"
+        STATE["auto_log"] = ["[auto] Iniciando pipeline end-to-end…"]
+        result = pipeline(params)  # fetch JPS → análisis → tickets → Monte Carlo
+        STATE["auto_log"] = list(result.get("log", []))
+        STATE["auto_log"].append("[auto] Reconciliando predicciones con resultados…")
+        try:
+            r = subprocess.run(
+                [sys.executable, os.path.join(HERE, "jps_reconcile.py")],
+                cwd=HERE, capture_output=True, text=True, timeout=120,
+            )
+            if r.returncode == 0:
+                STATE["auto_log"].append("[auto] ✓ reconcile ok")
+            else:
+                STATE["auto_log"].append(f"[auto] ⚠ reconcile rc={r.returncode}: {(r.stderr or '')[-160:]}")
+        except Exception as e:
+            STATE["auto_log"].append(f"[auto] ⚠ reconcile error: {e}")
+        STATE["auto_result"] = result
+        STATE["auto_status"] = "done"
+        STATE["auto_started_at"] = time.time()
+        STATE["auto_log"].append("[auto] ✓ Pipeline completo")
+    except Exception as e:
+        import traceback
+        STATE["auto_status"] = "error"
+        STATE["auto_log"].append(f"[auto] ✗ Error: {e}")
+        STATE["auto_result"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-1200:]}
+
+
+def trigger_auto(params):
+    """Punto de entrada del dashboard. Reusa caché si está fresca, si no lanza
+    el pipeline en background (sin bloquear). Idempotente ante entradas paralelas."""
+    if _auto_is_fresh():
+        return {"status": "done", "cached": True, "age": _auto_age(), "result": STATE["auto_result"]}
+    with _AUTO_LOCK:
+        if STATE["auto_status"] == "running":
+            return {"status": "running", "cached": False, "age": _auto_age()}
+        if _auto_is_fresh():
+            return {"status": "done", "cached": True, "age": _auto_age(), "result": STATE["auto_result"]}
+        STATE["auto_status"] = "running"
+        STATE["auto_log"] = ["[auto] En cola…"]
+        threading.Thread(target=_run_auto_pipeline, args=(params,), daemon=True).start()
+    return {"status": "running", "cached": False, "age": _auto_age()}
+
+
 # ─── HTTP SERVER ───────────────────────────────────────────────────────────────
 CORS = {
     "Access-Control-Allow-Origin":  "*",
@@ -455,6 +532,80 @@ def _check_basic_auth(headers) -> bool:
         return user == BASIC_AUTH_USER and pw == BASIC_AUTH_PASS
     except Exception:
         return False
+
+
+def _check_session_cookie(headers) -> bool:
+    """True si la cookie de sesión coincide con el token actual del server."""
+    raw = headers.get("Cookie", "")
+    for part in raw.split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == SESSION_COOKIE and v:
+            try:
+                return secrets.compare_digest(v, SESSION_TOKEN)
+            except Exception:
+                return False
+    return False
+
+
+def _is_authed(headers) -> bool:
+    """Autenticado si: auth desactivado, cookie de sesión válida (login screen),
+    o cabecera Basic Auth válida (compat curl / API / healthchecks)."""
+    if not BASIC_AUTH_ENABLED:
+        return True
+    return _check_session_cookie(headers) or _check_basic_auth(headers)
+
+
+def _validate_login(user, pw) -> bool:
+    """Valida credenciales del formulario de login contra las env vars."""
+    if not BASIC_AUTH_ENABLED:
+        return True
+    try:
+        return (secrets.compare_digest(user or "", BASIC_AUTH_USER)
+                and secrets.compare_digest(pw or "", BASIC_AUTH_PASS))
+    except Exception:
+        return False
+
+
+# ─── LOGIN SCREEN ──────────────────────────────────────────────────────────────
+def render_login(error=False) -> str:
+    err_html = (
+        '<div class="err">Usuario o contraseña incorrectos.</div>' if error else ""
+    )
+    return """<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JPS Tiempos Lab · Acceso</title>
+<style>
+:root{--green:#0F6E56;--green-d:#0a5443;--bg:#0d1117;--card:#161b22;--bd:#283041;--txt:#e6edf3;--mut:#8b949e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(1200px 600px at 50% -10%,#13301f,#0d1117);color:var(--txt);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo .dot{width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 14px var(--green)}
+.logo h1{font-size:17px;font-weight:800;letter-spacing:.2px}
+.sub{color:var(--mut);font-size:12px;margin-bottom:22px}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:14px 0 6px}
+input{width:100%;background:#0d1117;border:1px solid var(--bd);border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;outline:none;transition:border .15s}
+input:focus{border-color:var(--green)}
+button{width:100%;margin-top:22px;background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff;border:0;border-radius:9px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s}
+button:hover{filter:brightness(1.08)}
+.err{background:rgba(226,75,74,.12);border:1px solid rgba(226,75,74,.4);color:#ff9a9a;font-size:12.5px;border-radius:8px;padding:9px 12px;margin-bottom:14px}
+.foot{margin-top:18px;font-size:10.5px;color:var(--mut);text-align:center;line-height:1.5}
+</style></head>
+<body>
+<form class="card" method="POST" action="/login">
+  <div class="logo"><span class="dot"></span><h1>JPS Tiempos Lab</h1></div>
+  <div class="sub">Architect · acceso restringido</div>
+  """ + err_html + """
+  <label for="user">Usuario</label>
+  <input id="user" name="user" autocomplete="username" autofocus required>
+  <label for="pass">Contraseña</label>
+  <input id="pass" name="pass" type="password" autocomplete="current-password" required>
+  <button type="submit">Entrar</button>
+  <div class="foot">Todos los números tienen la misma probabilidad.<br>No se garantiza ningún resultado.</div>
+</form>
+</body></html>"""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -500,9 +651,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/login":
+            self._handle_login_post()
+            return
         if not self._require_auth():
             return
-        parsed = urllib.parse.urlparse(self.path)
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
             body_raw = self.rfile.read(length) if length else b""
@@ -551,13 +705,19 @@ class Handler(BaseHTTPRequestHandler):
             import traceback
             self.send_json({"error": str(e), "trace": traceback.format_exc()[-1500:]}, 500)
 
-    def _require_auth(self) -> bool:
-        """Si auth está enabled y falla, manda 401 y devuelve False. True si OK."""
-        if _check_basic_auth(self.headers):
+    def _require_auth(self, html=False) -> bool:
+        """True si autenticado (cookie de sesión o Basic Auth). Si falla:
+        - html=True  → redirige al /login (páginas del navegador)
+        - html=False → 401 JSON sin WWW-Authenticate (evita el popup nativo)."""
+        if _is_authed(self.headers):
             return True
+        if html:
+            self.send_response(302)
+            self.send_header("Location", "/login")
+            self.end_headers()
+            return False
         body = b'{"error": "authentication required"}'
         self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="JPS Tiempos Lab"')
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         for k, v in CORS.items():
@@ -566,20 +726,71 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         return False
 
+    def _handle_login_post(self):
+        """Procesa el formulario de login: valida credenciales, setea cookie de
+        sesión y redirige al dashboard. Acepta form-urlencoded o JSON."""
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(length).decode("utf-8") if length else ""
+        except Exception:
+            raw = ""
+        ct = self.headers.get("Content-Type", "")
+        if ct.startswith("application/json"):
+            try:
+                data = json.loads(raw) if raw else {}
+            except Exception:
+                data = {}
+        else:
+            data = {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+        user = (data.get("user") or data.get("username") or "").strip()
+        pw   = data.get("pass") or data.get("password") or ""
+        if _validate_login(user, pw):
+            self.send_response(302)
+            self.send_header(
+                "Set-Cookie",
+                f"{SESSION_COOKIE}={SESSION_TOKEN}; Path=/; HttpOnly; "
+                f"SameSite=Lax; Max-Age=43200",
+            )
+            self.send_header("Location", "/")
+            self.end_headers()
+        else:
+            self.send_response(302)
+            self.send_header("Location", "/login?error=1")
+            self.end_headers()
+
     def do_GET(self):
-        # Permitir healthcheck SIN auth (necesario para Railway healthchecks)
-        parsed_pre = urllib.parse.urlparse(self.path)
-        if parsed_pre.path != "/api/status" and not self._require_auth():
-            return
         parsed = urllib.parse.urlparse(self.path)
         params = dict(urllib.parse.parse_qsl(parsed.query))
+        path = parsed.path
+
+        # Rutas públicas (sin auth): healthcheck Railway, login y logout.
+        if path == "/login":
+            self.send_html(render_login(error=bool(params.get("error"))))
+            return
+        if path == "/logout":
+            self.send_response(302)
+            self.send_header(
+                "Set-Cookie",
+                f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+            )
+            self.send_header("Location", "/login")
+            self.end_headers()
+            return
+        if path != "/api/status":
+            # Páginas del navegador → redirige al login; API/datos → 401 JSON.
+            is_page = path == "/" or path.startswith("/assets/")
+            if not self._require_auth(html=is_page):
+                return
         try:
             if parsed.path == "/":
-                # Nuevo dashboard editorial (Preset 2 Coreintel). El antiguo
-                # console_v2.html sigue en el repo para uso analítico avanzado
-                # pero el server sirve por default el nuevo.
+                # Dashboard principal: la consola analítica v2 (jps_console_v2.html),
+                # que ahora corre el pipeline automáticamente al entrar. Fallbacks:
+                # dashboard.html editorial → HTML embebido.
+                console_path = os.path.join(HERE, "jps_console_v2.html")
                 dash_path = os.path.join(HERE, "dashboard.html")
-                if os.path.exists(dash_path):
+                if os.path.exists(console_path):
+                    self.send_file(console_path, "text/html; charset=utf-8")
+                elif os.path.exists(dash_path):
                     self.send_file(dash_path, "text/html; charset=utf-8")
                 else:
                     self.send_html(DASHBOARD_HTML)  # fallback al embedded
@@ -644,12 +855,19 @@ class Handler(BaseHTTPRequestHandler):
                     "last":   STATE["last"],
                 })
 
+            elif parsed.path == "/api/auto/run":
+                # El dashboard llama esto al entrar: corre el pipeline end-to-end
+                # en background (o reusa caché < TTL). No bloquea.
+                self.send_json(trigger_auto(params))
+
             elif parsed.path == "/api/auto":
                 # Browser polls this to track auto-pipeline progress
                 self.send_json({
                     "status": STATE["auto_status"],
                     "log":    STATE["auto_log"],
                     "result": STATE["auto_result"],
+                    "fresh":  _auto_is_fresh(),
+                    "age":    _auto_age(),
                 })
 
             else:
@@ -1669,7 +1887,11 @@ def main():
     import sys
     if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") not in ("utf8", "utf16"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    server = HTTPServer(("127.0.0.1", PORT), Handler)
+    # Bind a 0.0.0.0 por defecto para que el healthcheck del contenedor (Railway)
+    # y el tráfico externo lleguen. Local: igual sirve en http://localhost:PORT.
+    # Override con JPS_HOST=127.0.0.1 si se quiere restringir a loopback.
+    host = os.environ.get("JPS_HOST", "0.0.0.0")
+    server = HTTPServer((host, PORT), Handler)
     start_scheduler()
     print(f"""
 +--------------------------------------------------------------+

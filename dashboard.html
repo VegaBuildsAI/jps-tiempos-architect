@@ -892,7 +892,70 @@
       renderBandit();
     }
 
-    reloadAll();
+    // ════════════════════════════════════════════════════════════
+    // AUTO PIPELINE ON ENTRY — corre todo end-to-end al entrar
+    // (fetch JPS → análisis → tickets → Monte Carlo → reconcile).
+    // El server cachea ~10 min, así que entradas seguidas no
+    // re-consultan el API. Muestra un overlay con el progreso.
+    // ════════════════════════════════════════════════════════════
+    function autoOverlay() {
+      let el = document.getElementById('auto-overlay');
+      if (el) return el;
+      el = document.createElement('div');
+      el.id = 'auto-overlay';
+      el.style.cssText =
+        'position:fixed;inset:0;z-index:9999;background:rgba(13,17,23,.92);' +
+        'color:#e6edf3;display:flex;align-items:center;justify-content:center;' +
+        "font-family:-apple-system,'Segoe UI',sans-serif;backdrop-filter:blur(3px)";
+      el.innerHTML =
+        '<div style="width:min(560px,92vw);background:#161b22;border:1px solid #283041;' +
+        'border-radius:14px;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
+        '<span style="width:13px;height:13px;border-radius:50%;' +
+        'border:2px solid #0F6E56;border-top-color:transparent;display:inline-block;' +
+        'animation:aospin 0.8s linear infinite"></span>' +
+        '<b style="font-size:15px">Actualizando datos en vivo…</b></div>' +
+        '<div style="font-size:11.5px;color:#8b949e;margin-bottom:14px">Consultando el API de JPS y corriendo el análisis completo. Puede tardar hasta ~1 min.</div>' +
+        '<pre id="auto-log" style="margin:0;max-height:230px;overflow:auto;font-size:11px;' +
+        'line-height:1.55;color:#9fb0c0;background:#0d1117;border:1px solid #283041;' +
+        'border-radius:9px;padding:11px 13px;white-space:pre-wrap"></pre></div>' +
+        '<style>@keyframes aospin{to{transform:rotate(360deg)}}</style>';
+      document.body.appendChild(el);
+      return el;
+    }
+    function autoLog(lines) {
+      const pre = document.getElementById('auto-log');
+      if (pre && Array.isArray(lines)) {
+        pre.textContent = lines.join('\n');
+        pre.scrollTop = pre.scrollHeight;
+      }
+    }
+    function autoClose() {
+      const el = document.getElementById('auto-overlay');
+      if (el) el.remove();
+    }
+    async function startAuto() {
+      try {
+        const kick = await fetchJSON('/api/auto/run');
+        // Si ya hay resultado fresco en caché, no mostramos overlay: render directo.
+        if (kick && kick.status === 'done') { await reloadAll(); return; }
+        autoOverlay();
+        // Poll del progreso hasta done/error (~120s techo: 80 × 1.5s).
+        for (let i = 0; i < 80; i++) {
+          await new Promise(r => setTimeout(r, 1500));
+          const st = await fetchJSON('/api/auto');
+          if (st && st.log) autoLog(st.log);
+          if (!st || st.status === 'done' || st.status === 'error') break;
+        }
+      } catch (e) {
+        // Si el trigger falla (p.ej. sin red), seguimos con lo que haya en disco.
+      } finally {
+        await reloadAll();
+        autoClose();
+      }
+    }
+
+    startAuto();
   </script>
 </body>
 </html>
