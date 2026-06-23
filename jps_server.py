@@ -525,11 +525,39 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
-# Basic Auth opcional via env vars. Si BOTH están seteadas, se requiere auth.
-# Si AMBAS están vacías, el server queda abierto (modo local).
-BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "").strip()
-BASIC_AUTH_PASS = os.environ.get("BASIC_AUTH_PASS", "").strip()
-BASIC_AUTH_ENABLED = bool(BASIC_AUTH_USER and BASIC_AUTH_PASS)
+# Auth opcional via env vars. Soporta múltiples usuarios:
+#   - BASIC_AUTH_USER / BASIC_AUTH_PASS  → un usuario (compat hacia atrás).
+#   - JPS_USERS = "user1:pass1,user2:pass2"  → varios usuarios.
+# Si no hay ninguno configurado, el server queda abierto (modo local).
+def _parse_users():
+    users = {}
+    u = os.environ.get("BASIC_AUTH_USER", "").strip()
+    p = os.environ.get("BASIC_AUTH_PASS", "").strip()
+    if u and p:
+        users[u] = p
+    for pair in os.environ.get("JPS_USERS", "").split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            continue
+        name, _, pw = pair.partition(":")
+        name, pw = name.strip(), pw.strip()
+        if name and pw:
+            users[name] = pw
+    return users
+
+
+USERS = _parse_users()
+BASIC_AUTH_ENABLED = bool(USERS)
+
+
+def _creds_ok(user, pw) -> bool:
+    """Valida usuario+contraseña contra el dict de usuarios (tiempo constante)."""
+    if not user or user not in USERS:
+        return False
+    try:
+        return secrets.compare_digest(pw or "", USERS[user])
+    except Exception:
+        return False
 
 
 def _check_basic_auth(headers) -> bool:
@@ -544,7 +572,7 @@ def _check_basic_auth(headers) -> bool:
         encoded = auth_header.split(" ", 1)[1].strip()
         decoded = base64.b64decode(encoded).decode("utf-8")
         user, _, pw = decoded.partition(":")
-        return user == BASIC_AUTH_USER and pw == BASIC_AUTH_PASS
+        return _creds_ok(user, pw)
     except Exception:
         return False
 
@@ -571,14 +599,10 @@ def _is_authed(headers) -> bool:
 
 
 def _validate_login(user, pw) -> bool:
-    """Valida credenciales del formulario de login contra las env vars."""
+    """Valida credenciales del formulario de login contra el dict de usuarios."""
     if not BASIC_AUTH_ENABLED:
         return True
-    try:
-        return (secrets.compare_digest(user or "", BASIC_AUTH_USER)
-                and secrets.compare_digest(pw or "", BASIC_AUTH_PASS))
-    except Exception:
-        return False
+    return _creds_ok(user, pw)
 
 
 # ─── LOGIN SCREEN ──────────────────────────────────────────────────────────────
