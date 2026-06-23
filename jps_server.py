@@ -437,6 +437,10 @@ def pipeline(params):
         "input":        input_data,
         "output":       output,
         "last_result":  last,
+        # Histórico crudo (mismo formato que historical_data.json) para que el
+        # dashboard cargue S.draws directo del resultado, sin depender del archivo
+        # en disco (que en Railway vive en DATA_DIR ≠ app dir).
+        "historical":   hist,
     }
 
 

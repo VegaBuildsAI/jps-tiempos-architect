@@ -1709,8 +1709,10 @@ async function autoEntry(){
         if(!st||st.status==='done'||st.status==='error'){result=st&&st.result;break;}
       }
     }
-    // Cargar draws reales escritos por el server (mismo formato que handleHist).
-    const raw=await aeFetchJSON('/historical_data.json');
+    // Cargar draws reales: primero del resultado del pipeline (robusto en Railway,
+    // sin depender del archivo en disco); si no, del archivo servido.
+    let raw=(result&&result.historical)||null;
+    if(!raw)raw=await aeFetchJSON('/historical_data.json');
     if(raw){
       const draws=parseDraws(raw);
       if(draws.length){
