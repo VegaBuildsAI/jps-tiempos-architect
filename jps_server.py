@@ -40,7 +40,18 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-PORT     = int(sys.argv[1]) if len(sys.argv) > 1 else 7788
+def _resolve_port():
+    # Prioridad: env PORT (Railway lo inyecta) → arg CLI numérico (local) → 7788.
+    # Railway pasa el startCommand sin shell, así que un "${PORT:-7788}" llegaría
+    # como literal — por eso leemos el env directamente y validamos que sea dígito.
+    env_p = os.environ.get("PORT", "")
+    if env_p.isdigit():
+        return int(env_p)
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        return int(sys.argv[1])
+    return 7788
+
+PORT     = _resolve_port()
 JPS_BASE = "https://integration.jps.go.cr"
 HERE     = os.path.dirname(os.path.abspath(__file__))
 # DATA_DIR: dónde viven los datos persistentes. En Railway será /data (volume).
