@@ -1,0 +1,83 @@
+/* Coreintel Brand — Preset 2: "Editorial Clean"
+   Estilo limpio/austero (tipo Apple) para UIs de producto y landings.
+   Aplicar agregando class="ci-editorial" al <body>.
+
+   EXCEPCIÓN documentada: este preset usa el stack de fuentes del SISTEMA
+   (SF Pro / Segoe / Roboto), no Montserrat. Es deliberado, para lograr un
+   look ultra-clean. El preset 1 ("Corporativo") sí usa Montserrat.
+   Ver references/styles-presets.md. */
+
+:root {
+  /* Primarios de marca */
+  --ci-core: #41aafd;
+  --ci-core-500: #2d8fd9;       /* core oscurecido — accesible como texto chico sobre blanco */
+  --ci-intel: #4b457b;
+  --ci-negro: #1d1e1c;          /* negro de marca (no #000) */
+
+  /* Acentos — SOLO para datos / categorías (dots, números, barras, charts) */
+  --ci-naranja: #ff910e;
+  --ci-lima: #b4d70e;
+  --ci-cyan: #0cc1d1;
+  --ci-amarillo: #ffc00d;
+
+  /* Neutros del preset */
+  --ci-bg: #ffffff;
+  --ci-tile: #f5f5f7;
+  --ci-text: #1d1e1c;
+  --ci-text-muted: #6e6e73;
+  --ci-hairline: rgba(0,0,0,.08);
+
+  --ci-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+body.ci-editorial {
+  margin: 0;
+  font-family: var(--ci-font);
+  color: var(--ci-text);
+  background: var(--ci-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.ci-editorial * { box-sizing: border-box; }
+
+/* ===== Franja de marca — eco del swirl multicolor del logo. Va arriba de todo. ===== */
+.ci-brand-bar {
+  height: 4px;
+  background: linear-gradient(90deg, #0cc1d1 0%, #41aafd 22%, #4b457b 42%, #ff910e 64%, #ffc00d 82%, #b4d70e 100%);
+}
+
+/* ===== Co-branding (autoría CoreIntel sobre producto de cliente) ===== */
+.ci-byline { font-size: 11px; font-weight: 400; color: var(--ci-text-muted); }
+.ci-lockup { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ci-text-muted); }
+.ci-lockup img { height: 22px; width: auto; display: block; }   /* usar logo-principal.png sobre fondo claro */
+
+/* ===== Punto de categoría — el acento va SIEMPRE como fill, nunca como texto ===== */
+.ci-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 7px; vertical-align: middle; }
+
+/* ===== Tiles ===== */
+.ci-tile { background: var(--ci-tile); border-radius: 24px; padding: 44px 40px; }
+.ci-tile--dark { background: var(--ci-negro); color: #f5f5f7; }
+
+/* ===== Tipografía editorial (grande, tracking ajustado) ===== */
+.ci-h1     { font-size: clamp(40px, 7vw, 72px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin: 0; }
+.ci-sub    { font-size: clamp(19px, 2.6vw, 24px); font-weight: 500; color: var(--ci-text-muted); letter-spacing: -0.01em; }
+.ci-kicker { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ci-text-muted); }
+.ci-stat-num { font-size: clamp(38px, 5.5vw, 52px); font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+
+/* ===== Acciones — core como primario de marca ===== */
+.ci-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--ci-core); color: #fff; border: 0; border-radius: 999px;
+  padding: 11px 22px; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background .2s ease, transform .1s ease;
+}
+.ci-btn:hover { background: var(--ci-core-500); }
+.ci-btn:active { transform: scale(.97); }
+.ci-link { color: var(--ci-core-500); font-weight: 600; text-decoration: none; }   /* core-500 = accesible como texto */
+.ci-link:hover { text-decoration: underline; }
+
+/* ===== Estados (mapeo de marca; variantes accesibles para texto) ===== */
+.ci-state-ok    { color: #3a7d00; }   /* lima, oscurecido para contraste */
+.ci-state-warn  { color: #9a6a00; }   /* amarillo, oscurecido */
+.ci-state-error { color: #c0392b; }   /* rojo universal */
+.ci-state-info  { color: #0a8a96; }   /* cyan, oscurecido */

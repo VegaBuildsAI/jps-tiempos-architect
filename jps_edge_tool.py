@@ -26,6 +26,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import urllib.request
 import urllib.error
@@ -37,8 +38,8 @@ from typing import List, Optional, Dict, Tuple
 # CONSTANTS
 # ─────────────────────────────────────────────
 BASE_URL     = "https://integration.jps.go.cr"
-EXACTO_MULT  = 70
-REV_MULT     = 200
+EXACTO_MULT  = 70   # Per reglas oficiales JPS Costa Rica
+REV_MULT     = 200  # Reventados (condicional a acertar Exacto + bola Reventada)
 P_EXACTO     = 1 / 100
 P_REV        = 1 / 3
 N_MONTE      = 20_000
@@ -46,9 +47,21 @@ SEED_DEFAULT = 42
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# DATA_DIR: dónde viven los archivos de datos (JSONL, JSON, reports).
+# Local: mismo dir que el código (HERE). Railway/container: /data (env var).
+# Esto permite que el código corra IDÉNTICO local y en deploy persistente.
+DATA_DIR = os.environ.get("JPS_DATA_DIR", HERE)
+if DATA_DIR != HERE and not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
 
 def path(filename: str) -> str:
-    return os.path.join(HERE, filename)
+    """Resuelve la ruta de un archivo de DATOS.
+
+    Si JPS_DATA_DIR está configurada (Railway), usa ese directorio.
+    Si no, usa el directorio del código (modo local clásico).
+    """
+    return os.path.join(DATA_DIR, filename)
 
 
 def save_json(data: dict, filename: str):
@@ -64,6 +77,97 @@ def load_json(filename: str) -> dict:
     with open(fp, "rb") as f:
         raw = f.read().rstrip(b"\x00")   # strip trailing null bytes (artifact del acumulador)
     return json.loads(raw.decode("utf-8"))
+
+
+def _iso_from_cr_date(value: str) -> str:
+    value = str(value or "").strip()
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return value
+
+
+def _parse_frequency_table_lines(lines: List[str], start_idx: int) -> Tuple[Dict[str, dict], int]:
+    """Parse a copied JPS frequency table: number, count, last_seen triplets."""
+    idx = start_idx
+    # Skip headers until the first numeric row.
+    while idx < len(lines) and not re.fullmatch(r"\d{1,2}", lines[idx]):
+        idx += 1
+    out: Dict[str, dict] = {}
+    while idx + 2 < len(lines):
+        num_s, count_s, date_s = lines[idx], lines[idx + 1], lines[idx + 2]
+        if not re.fullmatch(r"\d{1,2}", num_s):
+            break
+        if not re.fullmatch(r"\d+", count_s):
+            break
+        if not re.fullmatch(r"\d{2}/\d{2}/\d{4}", date_s):
+            break
+        num = int(num_s)
+        if not 0 <= num <= 99:
+            break
+        out[str(num).zfill(2)] = {
+            "count": int(count_s),
+            "last_seen": _iso_from_cr_date(date_s),
+        }
+        idx += 3
+    return out, idx
+
+
+def parse_page_stats_text(text: str) -> dict:
+    """Parse official JPS page frequency tables copied as plain text.
+
+    The /page endpoint returns recent draw objects; the website also renders
+    global frequency tables. This parser imports those copied tables as a
+    separate official prior, keeping Exacto and Mega isolated.
+    """
+    lines = [ln.strip() for ln in str(text).splitlines() if ln.strip()]
+    exacto: Dict[str, dict] = {}
+    mega: Dict[str, dict] = {}
+    for idx, line in enumerate(lines):
+        normalized = line.casefold()
+        if "frecuencia de números ganadores".casefold() in normalized:
+            exacto, _ = _parse_frequency_table_lines(lines, idx + 1)
+        elif "mega números ganadores".casefold() in normalized:
+            mega, _ = _parse_frequency_table_lines(lines, idx + 1)
+    if not exacto and not mega:
+        raise ValueError("No encontré tablas 'Frecuencia de Números Ganadores' ni 'Mega Números Ganadores'.")
+    return {
+        "source_type": "jps_page_stats_text",
+        "generated_at": datetime.now().isoformat(),
+        "exacto": exacto,
+        "mega": mega,
+    }
+
+
+def _prior_doc(kind: str, numbers: Dict[str, dict], source: str) -> dict:
+    return {
+        "source": source,
+        "kind": kind,
+        "description": (
+            "Official JPS page frequency prior. Exacto and Mega are kept separate; "
+            "this file does not replace historical_data.json."
+        ),
+        "updated_at": datetime.now().isoformat(),
+        "numbers": numbers,
+    }
+
+
+def cmd_import_page_stats(args):
+    src = getattr(args, "file", "")
+    if not src:
+        raise ValueError("Debes pasar --file con el texto copiado de la página JPS.")
+    with open(src, "r", encoding="utf-8") as f:
+        text = f.read()
+    parsed = parse_page_stats_text(text)
+    parsed["source"] = src
+    save_json(parsed, "jps_page_stats.json")
+    if parsed.get("exacto"):
+        save_json(_prior_doc("exacto", parsed["exacto"], src), "global_frequency_prior.json")
+    if parsed.get("mega"):
+        save_json(_prior_doc("mega", parsed["mega"], src), "mega_frequency_prior.json")
+    print(f"  Exacto stats: {len(parsed.get('exacto', {}))} números")
+    print(f"  Mega stats  : {len(parsed.get('mega', {}))} números")
+    return parsed
 
 
 # ─────────────────────────────────────────────
@@ -135,6 +239,17 @@ def cmd_fetch(args):
             print(f"  Registros recibidos: {len(items)}")
         else:
             print("  Respuesta guardada (verificar estructura en historical_data.json)")
+    elif args.mode == "page":
+        print("Consultando página Nuevos Tiempos (/page)...")
+        data = api_get("/api/App/nuevostiempos/page")
+        save_json(data, "jps_page_data.json")
+        items = data.get("data", data) if isinstance(data, dict) else data
+        if isinstance(items, list):
+            print(f"  Días recibidos: {len(items)}")
+            if items:
+                _print_last_result(items[0])
+        else:
+            print("  Respuesta guardada (verificar estructura en jps_page_data.json)")
     else:
         print(f"Modo fetch desconocido: {args.mode}")
 
@@ -275,8 +390,17 @@ def _z_score(observed: int, total: int, p_expected: float) -> float:
     return round((p_hat - p_expected) / se, 4)
 
 
-def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"):
-    """Análisis estadístico. Acepta sorteos pre-filtrados via _draws."""
+def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS",
+                _no_save: bool = False, _mc_iterations: Optional[int] = None) -> Optional[dict]:
+    """Análisis estadístico. Acepta sorteos pre-filtrados via _draws.
+
+    _no_save: si True, no escribe analysis_report.json (útil para callers
+              programáticos como el backtester que invocan cientos de veces).
+    _mc_iterations: override del Monte Carlo interno para los IC de Reventada.
+              Default = N_MONTE (20,000). Útil bajarlo a ~200 desde el backtester
+              porque esos IC no afectan las decisiones del bet engine.
+    Retorna el report dict (o None si no se pudo generar).
+    """
     session_tag = f" [{_label}]" if _label != "TODOS" else ""
     print(f"\n═══ ANÁLISIS ESTADÍSTICO{session_tag} ═══")
     if _draws is not None:
@@ -367,18 +491,13 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
         smoothed = max(0.5, min(2.0, smoothed))
         weights[str(num).zfill(2)] = round(smoothed, 4)
 
-    # ── Weights mega (para selección secundaria)
+    # ── Weights mega (fenómeno aparte; no alimenta selección de Exacto)
     mega_weights = {}
     for num, freq in enumerate(freq_mega):
         raw_w = (freq / expected_per_mega) if expected_per_mega > 0 else 1.0
         smoothed = 0.80 * raw_w + 0.20 * 1.0
         smoothed = max(0.5, min(2.0, smoothed))
         mega_weights[str(num).zfill(2)] = round(smoothed, 4)
-
-    # ── Combined weight: exacto 75% + mega 25%
-    combined_weights = {}
-    for k in weights:
-        combined_weights[k] = round(0.75 * weights[k] + 0.25 * mega_weights.get(k, 1.0), 4)
 
     # ── Streak analysis para Reventada
     rev_sequence = []
@@ -408,15 +527,19 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
     p95_freq  = all_freqs[int(0.95 * 100)]
 
     # ── Monte Carlo Reventada
+    n_mc = _mc_iterations if _mc_iterations is not None else N_MONTE
     random.seed(SEED_DEFAULT)
-    mc_rev_rates = []
-    for _ in range(N_MONTE):
-        mc_hits = sum(1 for _ in range(valid) if random.randint(1, 3) == 1)
-        mc_rev_rates.append(mc_hits / valid)
-    mc_mean  = sum(mc_rev_rates) / N_MONTE
-    mc_std   = math.sqrt(sum((x - mc_mean)**2 for x in mc_rev_rates) / (N_MONTE - 1))
-    mc_lo    = sorted(mc_rev_rates)[int(0.025 * N_MONTE)]
-    mc_hi    = sorted(mc_rev_rates)[int(0.975 * N_MONTE)]
+    if n_mc > 1:
+        mc_rev_rates = []
+        for _ in range(n_mc):
+            mc_hits = sum(1 for _ in range(valid) if random.randint(1, 3) == 1)
+            mc_rev_rates.append(mc_hits / valid)
+        mc_mean  = sum(mc_rev_rates) / n_mc
+        mc_std   = math.sqrt(sum((x - mc_mean)**2 for x in mc_rev_rates) / (n_mc - 1))
+        mc_lo    = sorted(mc_rev_rates)[int(0.025 * n_mc)]
+        mc_hi    = sorted(mc_rev_rates)[int(0.975 * n_mc)]
+    else:
+        mc_mean = mc_std = mc_lo = mc_hi = 0.0
 
     # Interpretation
     significance = "SIGNIFICATIVO (p < 0.05)" if p_num < 0.05 else "dentro de variabilidad esperada"
@@ -478,14 +601,7 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
             vs = freq - expected_per_mega
             mw = mega_weights[str(num).zfill(2)]
             print(f"  {rank:<4} {str(num).zfill(2):<6} {freq:<6} {vs:>+8.1f} {z:>+9.4f} {mw:>7.4f}")
-        print(f"\n  TOP 10 COMBINADOS (peso exacto 75% + mega 25%):")
-        print(f"  {'#':<4} {'Núm':<6} {'PesoE':>7} {'PesoM':>7} {'PesoC':>7}")
-        print(f"  {'─'*4} {'─'*6} {'─'*7} {'─'*7} {'─'*7}")
-        ranked_combined = sorted(combined_weights.items(), key=lambda x: x[1], reverse=True)
-        for rank, (k, cw) in enumerate(ranked_combined[:10], 1):
-            we = weights[k]
-            wm = mega_weights.get(k, 1.0)
-            print(f"  {rank:<4} {k:<6} {we:>7.4f} {wm:>7.4f} {cw:>7.4f}")
+        print(f"\n  Nota: Mega se reporta como fenómeno independiente; no modifica pesos ni selección de Exacto.")
 
     # Save analysis report
     report = {
@@ -523,7 +639,6 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
         ],
         "weights": weights,
         "mega_weights": mega_weights,
-        "combined_weights": combined_weights,
         "mega_numbers": {
             "chi2": chi2_mega,
             "p_value": p_mega,
@@ -544,8 +659,10 @@ def cmd_analyze(args, _draws: Optional[List[dict]] = None, _label: str = "TODOS"
         ],
         "disclaimer": "Todos los números tienen exactamente la misma probabilidad en un sistema aleatorio. No se garantiza ningún resultado.",
     }
-    save_json(report, "analysis_report.json")
+    if not _no_save:
+        save_json(report, "analysis_report.json")
     print(f"\n  DISCLAIMER: {report['disclaimer']}\n")
+    return report
 
 
 def cmd_session_analyze(args):
@@ -704,11 +821,8 @@ def cmd_bet(args):
     weights = None
     try:
         report = load_json("analysis_report.json")
-        # Use combined_weights (exacto 75% + mega 25%) if available, else exacto only
-        weights = report.get("combined_weights") or report.get("weights", None)
-        has_mega = bool(report.get("mega_weights"))
-        src = "combinado (Exacto 75% + Mega 25%)" if has_mega else "exacto"
-        print(f"  ✓ Pesos desde análisis histórico cargados [{src}]")
+        weights = report.get("weights", None)
+        print("  ✓ Pesos desde análisis histórico cargados [Exacto solamente]")
     except FileNotFoundError:
         print("  (Sin análisis previo — usando pesos uniformes)")
 
@@ -942,6 +1056,32 @@ def cmd_simulate(args):
 # SECTION 5 — AUDIT ENGINE
 # ─────────────────────────────────────────────
 
+def payout_ticket(num_exacto: int, base: int, rev: int,
+                  drawn_exacto: int, drawn_reventada: str) -> dict:
+    """Calcula el outcome de un ticket dado un resultado de sorteo.
+
+    Pura — sin I/O, sin globals. Reusable desde backtester, reconciler, etc.
+    drawn_reventada: "SI" o "NO".
+    Retorna: hit_exacto, exacto_win, rev_win, recuperado, cost, neto, roi.
+    """
+    cost = base + rev
+    hit = (num_exacto == drawn_exacto)
+    exacto_win = EXACTO_MULT * base if hit else 0
+    rev_win    = REV_MULT * rev if (hit and drawn_reventada == "SI") else 0
+    recuperado = exacto_win + rev_win
+    neto       = recuperado - cost
+    roi        = neto / cost if cost else 0
+    return {
+        "hit_exacto": hit,
+        "exacto_win": exacto_win,
+        "rev_win": rev_win,
+        "recuperado": recuperado,
+        "cost": cost,
+        "neto": neto,
+        "roi": roi,
+    }
+
+
 def cmd_audit(args):
     print("\n═══ AUDITORÍA ═══")
     resultado_exacto  = int(args.exacto.lstrip("0") or "0")
@@ -975,14 +1115,13 @@ def cmd_audit(args):
         num  = int(t.get("num_exacto", t.get("numero", 0)))
         base = int(t.get("base", 0))
         rev  = int(t.get("rev", 0))
-        cost = base + rev
 
-        hit = (num == resultado_exacto)
-        exacto_win = EXACTO_MULT * base if hit else 0
-        rev_win    = REV_MULT * rev if (hit and resultado_rev == "SI") else 0
-        recuperado = exacto_win + rev_win
-        neto       = recuperado - cost
-        roi        = neto / cost if cost else 0
+        result = payout_ticket(num, base, rev, resultado_exacto, resultado_rev)
+        cost       = result["cost"]
+        hit        = result["hit_exacto"]
+        recuperado = result["recuperado"]
+        neto       = result["neto"]
+        roi        = result["roi"]
 
         total_apostado   += cost
         total_recuperado += recuperado
@@ -1073,8 +1212,15 @@ def main():
 
     # fetch
     p_fetch = sub.add_parser("fetch", help="Obtener datos del API JPS (corre localmente)")
-    p_fetch.add_argument("--mode", choices=["last", "history"], default="last")
+    p_fetch.add_argument("--mode", choices=["last", "history", "page"], default="last")
     p_fetch.add_argument("--days", type=int, default=60, help="Días de histórico (default: 60)")
+
+    # import-page-stats
+    p_ips = sub.add_parser(
+        "import-page-stats",
+        help="Importar tablas oficiales copiadas de la pagina JPS (Exacto/Mega global)",
+    )
+    p_ips.add_argument("--file", required=True, help="Archivo .txt con las tablas copiadas de la pagina")
 
     # analyze
     p_analyze = sub.add_parser("analyze", help="Análisis estadístico de historical_data.json (todas las sesiones)")
@@ -1116,6 +1262,8 @@ def main():
 
     if args.command == "fetch":
         cmd_fetch(args)
+    elif args.command == "import-page-stats":
+        cmd_import_page_stats(args)
     elif args.command == "analyze":
         cmd_analyze(args)
     elif args.command == "session_analyze":

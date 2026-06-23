@@ -1,0 +1,43 @@
+# Datos runtime — viven en el volume, no en la imagen
+*.jsonl
+*.json
+!railway.json
+analysis_session_*.json
+*.txt
+accumulate_log.txt
+
+# Backtest outputs (regenerable)
+backtest_report.json
+backtest_sessions.json
+backtest_summary.md
+randomness_tests_report.json
+nist_sts_report.json
+diehard_report.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local config
+.claude/
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docs (no necesarios en runtime)
+LEARNINGS.md
+README.md
+*.md
+!CLAUDE.md
+
+# Templates
+*.template

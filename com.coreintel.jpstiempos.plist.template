@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Identificador único del servicio. Reverse-DNS estilo Apple. -->
+    <key>Label</key>
+    <string>com.coreintel.jpstiempos</string>
+
+    <!-- Qué ejecutar: python3 jps_server.py -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>jps_server.py</string>
+    </array>
+
+    <!-- Directorio donde correrlo (con espacio en el nombre, ojo) -->
+    <key>WorkingDirectory</key>
+    <string>/Users/carlosleon/VS code - trabajos/Proyectos/jps-tiempos-architect </string>
+
+    <!-- Arrancar al loguearse (no al boot — esto es per-user) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Reiniciarlo automáticamente si crashea -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Esperar al menos 30s entre reinicios para evitar loops si está roto -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Redirigir stdout y stderr a logs persistentes -->
+    <key>StandardOutPath</key>
+    <string>/tmp/jps_server.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jps_server.err</string>
+
+    <!-- PATH con el anaconda para que encuentre dependencias -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Process type background para que macOS no lo throttle -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

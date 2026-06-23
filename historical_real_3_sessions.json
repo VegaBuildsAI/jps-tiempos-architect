@@ -1,0 +1,3621 @@
+[
+  {
+    "numero": 90,
+    "meganNumero": 78,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-17"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 52,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-17"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 81,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-17"
+  },
+  {
+    "numero": 56,
+    "meganNumero": 30,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-16"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 12,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-16"
+  },
+  {
+    "numero": 61,
+    "meganNumero": 63,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-16"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-15"
+  },
+  {
+    "numero": 86,
+    "meganNumero": 57,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-15"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-15"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 19,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-14"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 91,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-14"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 28,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-14"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 43,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-13"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 68,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-13"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 49,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-13"
+  },
+  {
+    "numero": 40,
+    "meganNumero": 22,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-12"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 1,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-12"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 40,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-12"
+  },
+  {
+    "numero": 21,
+    "meganNumero": 81,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-11"
+  },
+  {
+    "numero": 83,
+    "meganNumero": 41,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-11"
+  },
+  {
+    "numero": 61,
+    "meganNumero": 9,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-11"
+  },
+  {
+    "numero": 50,
+    "meganNumero": 47,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-10"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 29,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-10"
+  },
+  {
+    "numero": 92,
+    "meganNumero": 99,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-10"
+  },
+  {
+    "numero": 51,
+    "meganNumero": 63,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-09"
+  },
+  {
+    "numero": 29,
+    "meganNumero": 90,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-09"
+  },
+  {
+    "numero": 10,
+    "meganNumero": 91,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-09"
+  },
+  {
+    "numero": 66,
+    "meganNumero": 88,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-08"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 72,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-08"
+  },
+  {
+    "numero": 92,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-08"
+  },
+  {
+    "numero": 87,
+    "meganNumero": 76,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-07"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 34,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-07"
+  },
+  {
+    "numero": 9,
+    "meganNumero": 48,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-07"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 16,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-05-06"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-06"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 60,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-05-06"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 3,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-05"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 24,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-05"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-05"
+  },
+  {
+    "numero": 0,
+    "meganNumero": 11,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-04"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 80,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-04"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 78,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-04"
+  },
+  {
+    "numero": 77,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-03"
+  },
+  {
+    "numero": 23,
+    "meganNumero": 13,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-05-03"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 20,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-03"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 85,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-02"
+  },
+  {
+    "numero": 50,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-02"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 25,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-02"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 88,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-05-01"
+  },
+  {
+    "numero": 36,
+    "meganNumero": 80,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-05-01"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 6,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-05-01"
+  },
+  {
+    "numero": 86,
+    "meganNumero": 51,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-30"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-30"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 71,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-30"
+  },
+  {
+    "numero": 41,
+    "meganNumero": 62,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-29"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 61,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-29"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 20,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-29"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 7,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-28"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 40,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-28"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-28"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 48,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-27"
+  },
+  {
+    "numero": 66,
+    "meganNumero": 50,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-27"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 28,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-27"
+  },
+  {
+    "numero": 50,
+    "meganNumero": 48,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-26"
+  },
+  {
+    "numero": 64,
+    "meganNumero": 49,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-26"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 23,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-26"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 30,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-25"
+  },
+  {
+    "numero": 40,
+    "meganNumero": 17,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-25"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 73,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-25"
+  },
+  {
+    "numero": 64,
+    "meganNumero": 14,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-24"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-24"
+  },
+  {
+    "numero": 32,
+    "meganNumero": 4,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-24"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 5,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-23"
+  },
+  {
+    "numero": 65,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-23"
+  },
+  {
+    "numero": 83,
+    "meganNumero": 55,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-23"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-22"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 54,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-22"
+  },
+  {
+    "numero": 23,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-22"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 96,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-21"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 2,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-21"
+  },
+  {
+    "numero": 73,
+    "meganNumero": 49,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-21"
+  },
+  {
+    "numero": 58,
+    "meganNumero": 97,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-20"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 11,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-20"
+  },
+  {
+    "numero": 5,
+    "meganNumero": 34,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-20"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 17,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-19"
+  },
+  {
+    "numero": 47,
+    "meganNumero": 99,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-19"
+  },
+  {
+    "numero": 77,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-19"
+  },
+  {
+    "numero": 73,
+    "meganNumero": 67,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-18"
+  },
+  {
+    "numero": 92,
+    "meganNumero": 81,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-18"
+  },
+  {
+    "numero": 24,
+    "meganNumero": 10,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-18"
+  },
+  {
+    "numero": 49,
+    "meganNumero": 53,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-17"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 21,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-17"
+  },
+  {
+    "numero": 20,
+    "meganNumero": 35,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-17"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 50,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-16"
+  },
+  {
+    "numero": 47,
+    "meganNumero": 68,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-16"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 77,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-16"
+  },
+  {
+    "numero": 50,
+    "meganNumero": 44,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-15"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 80,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-15"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 67,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-15"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 24,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-14"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 58,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-14"
+  },
+  {
+    "numero": 62,
+    "meganNumero": 66,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-14"
+  },
+  {
+    "numero": 54,
+    "meganNumero": 52,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-13"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 9,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-13"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 85,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-13"
+  },
+  {
+    "numero": 47,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-12"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 86,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-12"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 8,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-12"
+  },
+  {
+    "numero": 20,
+    "meganNumero": 99,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-11"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 96,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-11"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 75,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-11"
+  },
+  {
+    "numero": 8,
+    "meganNumero": 81,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-10"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 20,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-10"
+  },
+  {
+    "numero": 27,
+    "meganNumero": 91,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-10"
+  },
+  {
+    "numero": 54,
+    "meganNumero": 14,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-09"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 55,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-09"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 82,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-09"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 12,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-08"
+  },
+  {
+    "numero": 61,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-08"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 53,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-04-08"
+  },
+  {
+    "numero": 42,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-07"
+  },
+  {
+    "numero": 98,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-07"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 31,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-07"
+  },
+  {
+    "numero": 48,
+    "meganNumero": 78,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-04-06"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 66,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-04-06"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 77,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-06"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 62,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-04-01"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 62,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-04-01"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-04-01"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 20,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-31"
+  },
+  {
+    "numero": 8,
+    "meganNumero": 98,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-31"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-31"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 68,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-30"
+  },
+  {
+    "numero": 11,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-30"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-30"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 2,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-29"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 21,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-29"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 73,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-29"
+  },
+  {
+    "numero": 62,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-28"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 22,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-28"
+  },
+  {
+    "numero": 42,
+    "meganNumero": 50,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-28"
+  },
+  {
+    "numero": 7,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-27"
+  },
+  {
+    "numero": 23,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-27"
+  },
+  {
+    "numero": 28,
+    "meganNumero": 56,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-27"
+  },
+  {
+    "numero": 6,
+    "meganNumero": 97,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-26"
+  },
+  {
+    "numero": 58,
+    "meganNumero": 7,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-26"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 60,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-26"
+  },
+  {
+    "numero": 9,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-25"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 58,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-25"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 7,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-25"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 91,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-24"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-24"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 87,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-24"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 61,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-23"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 19,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-23"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-23"
+  },
+  {
+    "numero": 13,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-22"
+  },
+  {
+    "numero": 22,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-22"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-22"
+  },
+  {
+    "numero": 77,
+    "meganNumero": 25,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-21"
+  },
+  {
+    "numero": 53,
+    "meganNumero": 79,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-21"
+  },
+  {
+    "numero": 48,
+    "meganNumero": 42,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-21"
+  },
+  {
+    "numero": 77,
+    "meganNumero": 31,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-20"
+  },
+  {
+    "numero": 21,
+    "meganNumero": 76,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-20"
+  },
+  {
+    "numero": 22,
+    "meganNumero": 92,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-20"
+  },
+  {
+    "numero": 41,
+    "meganNumero": 70,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-19"
+  },
+  {
+    "numero": 41,
+    "meganNumero": 79,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-19"
+  },
+  {
+    "numero": 49,
+    "meganNumero": 35,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-19"
+  },
+  {
+    "numero": 29,
+    "meganNumero": 37,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-18"
+  },
+  {
+    "numero": 86,
+    "meganNumero": 67,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-18"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-18"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 30,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-17"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 55,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-17"
+  },
+  {
+    "numero": 66,
+    "meganNumero": 94,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-17"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 15,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-16"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 38,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-16"
+  },
+  {
+    "numero": 22,
+    "meganNumero": 64,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-16"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 35,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-15"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-15"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 40,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-15"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-14"
+  },
+  {
+    "numero": 6,
+    "meganNumero": 69,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-14"
+  },
+  {
+    "numero": 7,
+    "meganNumero": 95,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-14"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 2,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-13"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 60,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-13"
+  },
+  {
+    "numero": 8,
+    "meganNumero": 60,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-13"
+  },
+  {
+    "numero": 23,
+    "meganNumero": 84,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-12"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 64,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-12"
+  },
+  {
+    "numero": 28,
+    "meganNumero": 50,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-12"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 72,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-11"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 95,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-11"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 64,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-11"
+  },
+  {
+    "numero": 51,
+    "meganNumero": 37,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-10"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 96,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-10"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 5,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-10"
+  },
+  {
+    "numero": 44,
+    "meganNumero": 22,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-09"
+  },
+  {
+    "numero": 64,
+    "meganNumero": 40,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-09"
+  },
+  {
+    "numero": 13,
+    "meganNumero": 30,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-09"
+  },
+  {
+    "numero": 67,
+    "meganNumero": 96,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-08"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 77,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-08"
+  },
+  {
+    "numero": 11,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-08"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 14,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-07"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 19,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-07"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-07"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-06"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-06"
+  },
+  {
+    "numero": 51,
+    "meganNumero": 5,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-06"
+  },
+  {
+    "numero": 54,
+    "meganNumero": 24,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-05"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-05"
+  },
+  {
+    "numero": 57,
+    "meganNumero": 6,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-05"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-04"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 37,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-03-04"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-03-04"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 71,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-03"
+  },
+  {
+    "numero": 79,
+    "meganNumero": 40,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-03"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 54,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-03"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 19,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-03-02"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 89,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-02"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 32,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-02"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 69,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-03-01"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 41,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-03-01"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 21,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-03-01"
+  },
+  {
+    "numero": 10,
+    "meganNumero": 71,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-28"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 67,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-28"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 68,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-28"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 76,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-27"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 62,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-27"
+  },
+  {
+    "numero": 98,
+    "meganNumero": 4,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-27"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 48,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-26"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 10,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-26"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 32,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-26"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 72,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-25"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-25"
+  },
+  {
+    "numero": 64,
+    "meganNumero": 38,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-25"
+  },
+  {
+    "numero": 95,
+    "meganNumero": 2,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-24"
+  },
+  {
+    "numero": 32,
+    "meganNumero": 92,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-24"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 82,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-24"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 83,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-23"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 15,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-23"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-23"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 73,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-22"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 85,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-22"
+  },
+  {
+    "numero": 0,
+    "meganNumero": 44,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-22"
+  },
+  {
+    "numero": 24,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-21"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-21"
+  },
+  {
+    "numero": 87,
+    "meganNumero": 99,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-21"
+  },
+  {
+    "numero": 86,
+    "meganNumero": 13,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-20"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 14,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-20"
+  },
+  {
+    "numero": 21,
+    "meganNumero": 30,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-20"
+  },
+  {
+    "numero": 53,
+    "meganNumero": 45,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-19"
+  },
+  {
+    "numero": 20,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-19"
+  },
+  {
+    "numero": 41,
+    "meganNumero": 94,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-19"
+  },
+  {
+    "numero": 20,
+    "meganNumero": 97,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-18"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 41,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-18"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 94,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-18"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 18,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-17"
+  },
+  {
+    "numero": 94,
+    "meganNumero": 29,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-17"
+  },
+  {
+    "numero": 70,
+    "meganNumero": 86,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-17"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 69,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-16"
+  },
+  {
+    "numero": 6,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-16"
+  },
+  {
+    "numero": 35,
+    "meganNumero": 88,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-16"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 99,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-15"
+  },
+  {
+    "numero": 47,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-15"
+  },
+  {
+    "numero": 32,
+    "meganNumero": 86,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-15"
+  },
+  {
+    "numero": 40,
+    "meganNumero": 83,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-14"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 50,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-14"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 38,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-14"
+  },
+  {
+    "numero": 44,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-13"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 45,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-13"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 65,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-13"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 10,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-12"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 87,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-12"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 4,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-12"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 70,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-11"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 75,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-11"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 43,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-11"
+  },
+  {
+    "numero": 77,
+    "meganNumero": 36,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-10"
+  },
+  {
+    "numero": 3,
+    "meganNumero": 82,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-10"
+  },
+  {
+    "numero": 7,
+    "meganNumero": 56,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-10"
+  },
+  {
+    "numero": 11,
+    "meganNumero": 94,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-09"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 36,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-09"
+  },
+  {
+    "numero": 8,
+    "meganNumero": 5,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-09"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 62,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-08"
+  },
+  {
+    "numero": 71,
+    "meganNumero": 30,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-08"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 44,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-08"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 39,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-07"
+  },
+  {
+    "numero": 27,
+    "meganNumero": 45,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-07"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 85,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-07"
+  },
+  {
+    "numero": 73,
+    "meganNumero": 48,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-06"
+  },
+  {
+    "numero": 93,
+    "meganNumero": 37,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-06"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 33,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-06"
+  },
+  {
+    "numero": 83,
+    "meganNumero": 1,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-05"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 13,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-05"
+  },
+  {
+    "numero": 38,
+    "meganNumero": 65,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-05"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-02-04"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 44,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-02-04"
+  },
+  {
+    "numero": 35,
+    "meganNumero": 11,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-02-04"
+  },
+  {
+    "numero": 53,
+    "meganNumero": 75,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-03"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-03"
+  },
+  {
+    "numero": 84,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-03"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-02-02"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 30,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-02-02"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 84,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-02-02"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 18,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-31"
+  },
+  {
+    "numero": 67,
+    "meganNumero": 98,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-31"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 29,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-31"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-30"
+  },
+  {
+    "numero": 92,
+    "meganNumero": 13,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-30"
+  },
+  {
+    "numero": 36,
+    "meganNumero": 42,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-30"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 22,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-29"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-29"
+  },
+  {
+    "numero": 66,
+    "meganNumero": 78,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-29"
+  },
+  {
+    "numero": 27,
+    "meganNumero": 9,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-28"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 13,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-28"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 84,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-28"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 39,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-27"
+  },
+  {
+    "numero": 3,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-27"
+  },
+  {
+    "numero": 58,
+    "meganNumero": 50,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-27"
+  },
+  {
+    "numero": 44,
+    "meganNumero": 48,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-26"
+  },
+  {
+    "numero": 34,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-26"
+  },
+  {
+    "numero": 83,
+    "meganNumero": 82,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-26"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 43,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-25"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 7,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-25"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-25"
+  },
+  {
+    "numero": 70,
+    "meganNumero": 81,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-24"
+  },
+  {
+    "numero": 24,
+    "meganNumero": 70,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-24"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 44,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-24"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 39,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-23"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-23"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 92,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-23"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 27,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-22"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 77,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-22"
+  },
+  {
+    "numero": 13,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-22"
+  },
+  {
+    "numero": 9,
+    "meganNumero": 86,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-21"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 79,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-21"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 83,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-21"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 50,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-20"
+  },
+  {
+    "numero": 39,
+    "meganNumero": 56,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-20"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 38,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-20"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 7,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-19"
+  },
+  {
+    "numero": 22,
+    "meganNumero": 34,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-19"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 94,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-19"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 83,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-18"
+  },
+  {
+    "numero": 6,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-18"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-18"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 95,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-17"
+  },
+  {
+    "numero": 54,
+    "meganNumero": 9,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-17"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 51,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-17"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 41,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-16"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 61,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-16"
+  },
+  {
+    "numero": 0,
+    "meganNumero": 27,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-16"
+  },
+  {
+    "numero": 48,
+    "meganNumero": 97,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-15"
+  },
+  {
+    "numero": 75,
+    "meganNumero": 50,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-15"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 97,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-15"
+  },
+  {
+    "numero": 36,
+    "meganNumero": 19,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-14"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 90,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-14"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 53,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-14"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 3,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-13"
+  },
+  {
+    "numero": 32,
+    "meganNumero": 89,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-13"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 91,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-13"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 72,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-12"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 72,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-12"
+  },
+  {
+    "numero": 10,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-12"
+  },
+  {
+    "numero": 57,
+    "meganNumero": 56,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-11"
+  },
+  {
+    "numero": 27,
+    "meganNumero": 5,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-11"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 37,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-11"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 57,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-10"
+  },
+  {
+    "numero": 87,
+    "meganNumero": 20,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-10"
+  },
+  {
+    "numero": 19,
+    "meganNumero": 69,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-10"
+  },
+  {
+    "numero": 95,
+    "meganNumero": 95,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-09"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 40,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-09"
+  },
+  {
+    "numero": 19,
+    "meganNumero": 77,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-09"
+  },
+  {
+    "numero": 29,
+    "meganNumero": 6,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-08"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 46,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-08"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 50,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-08"
+  },
+  {
+    "numero": 20,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-07"
+  },
+  {
+    "numero": 58,
+    "meganNumero": 52,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-07"
+  },
+  {
+    "numero": 73,
+    "meganNumero": 48,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-07"
+  },
+  {
+    "numero": 36,
+    "meganNumero": 83,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-06"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 48,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-06"
+  },
+  {
+    "numero": 96,
+    "meganNumero": 5,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-06"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 82,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-05"
+  },
+  {
+    "numero": 61,
+    "meganNumero": 10,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2026-01-05"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 36,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-05"
+  },
+  {
+    "numero": 48,
+    "meganNumero": 98,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2026-01-04"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-04"
+  },
+  {
+    "numero": 3,
+    "meganNumero": 53,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-04"
+  },
+  {
+    "numero": 90,
+    "meganNumero": 63,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-03"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-03"
+  },
+  {
+    "numero": 38,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2026-01-03"
+  },
+  {
+    "numero": 30,
+    "meganNumero": 21,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2026-01-02"
+  },
+  {
+    "numero": 67,
+    "meganNumero": 13,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2026-01-02"
+  },
+  {
+    "numero": 6,
+    "meganNumero": 13,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2026-01-02"
+  },
+  {
+    "numero": 50,
+    "meganNumero": 0,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-31"
+  },
+  {
+    "numero": 14,
+    "meganNumero": 79,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-31"
+  },
+  {
+    "numero": 79,
+    "meganNumero": 53,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-30"
+  },
+  {
+    "numero": 65,
+    "meganNumero": 88,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-30"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 36,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-30"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 12,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-29"
+  },
+  {
+    "numero": 75,
+    "meganNumero": 73,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-12-29"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 38,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-29"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 32,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-28"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 33,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-28"
+  },
+  {
+    "numero": 35,
+    "meganNumero": 70,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-28"
+  },
+  {
+    "numero": 9,
+    "meganNumero": 22,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-27"
+  },
+  {
+    "numero": 18,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-27"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 47,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-27"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 99,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-26"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 69,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-26"
+  },
+  {
+    "numero": 69,
+    "meganNumero": 29,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-26"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 7,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-24"
+  },
+  {
+    "numero": 19,
+    "meganNumero": 81,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-24"
+  },
+  {
+    "numero": 24,
+    "meganNumero": 71,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-23"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 6,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-12-23"
+  },
+  {
+    "numero": 24,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-23"
+  },
+  {
+    "numero": 9,
+    "meganNumero": 93,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-22"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 62,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-22"
+  },
+  {
+    "numero": 8,
+    "meganNumero": 86,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-22"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 15,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-21"
+  },
+  {
+    "numero": 87,
+    "meganNumero": 5,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-12-21"
+  },
+  {
+    "numero": 82,
+    "meganNumero": 73,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-21"
+  },
+  {
+    "numero": 0,
+    "meganNumero": 3,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-20"
+  },
+  {
+    "numero": 67,
+    "meganNumero": 41,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-20"
+  },
+  {
+    "numero": 1,
+    "meganNumero": 31,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-20"
+  },
+  {
+    "numero": 97,
+    "meganNumero": 92,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-19"
+  },
+  {
+    "numero": 63,
+    "meganNumero": 67,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-19"
+  },
+  {
+    "numero": 72,
+    "meganNumero": 26,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-19"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 54,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-18"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 47,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-18"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-18"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-17"
+  },
+  {
+    "numero": 42,
+    "meganNumero": 95,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-17"
+  },
+  {
+    "numero": 84,
+    "meganNumero": 58,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-17"
+  },
+  {
+    "numero": 21,
+    "meganNumero": 89,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-16"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 98,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-16"
+  },
+  {
+    "numero": 60,
+    "meganNumero": 90,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-16"
+  },
+  {
+    "numero": 86,
+    "meganNumero": 6,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-15"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 91,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-15"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 97,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-15"
+  },
+  {
+    "numero": 93,
+    "meganNumero": 88,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-14"
+  },
+  {
+    "numero": 64,
+    "meganNumero": 43,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-14"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 25,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-14"
+  },
+  {
+    "numero": 59,
+    "meganNumero": 23,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-13"
+  },
+  {
+    "numero": 11,
+    "meganNumero": 3,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-13"
+  },
+  {
+    "numero": 44,
+    "meganNumero": 31,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-13"
+  },
+  {
+    "numero": 52,
+    "meganNumero": 35,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-12"
+  },
+  {
+    "numero": 46,
+    "meganNumero": 25,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-12-12"
+  },
+  {
+    "numero": 76,
+    "meganNumero": 24,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-12"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 78,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-11"
+  },
+  {
+    "numero": 48,
+    "meganNumero": 83,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-11"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 23,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-11"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 60,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-10"
+  },
+  {
+    "numero": 40,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-10"
+  },
+  {
+    "numero": 26,
+    "meganNumero": 35,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-10"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 58,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-09"
+  },
+  {
+    "numero": 79,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-09"
+  },
+  {
+    "numero": 74,
+    "meganNumero": 85,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-09"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 68,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-08"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 54,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-08"
+  },
+  {
+    "numero": 11,
+    "meganNumero": 38,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-08"
+  },
+  {
+    "numero": 53,
+    "meganNumero": 23,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-07"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 31,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-07"
+  },
+  {
+    "numero": 17,
+    "meganNumero": 22,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-07"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 1,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-06"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 13,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-06"
+  },
+  {
+    "numero": 57,
+    "meganNumero": 29,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-06"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 4,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-05"
+  },
+  {
+    "numero": 56,
+    "meganNumero": 14,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-05"
+  },
+  {
+    "numero": 68,
+    "meganNumero": 90,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-05"
+  },
+  {
+    "numero": 16,
+    "meganNumero": 54,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-04"
+  },
+  {
+    "numero": 89,
+    "meganNumero": 43,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-04"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 23,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-04"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 71,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-03"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 3,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-03"
+  },
+  {
+    "numero": 22,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-12-03"
+  },
+  {
+    "numero": 85,
+    "meganNumero": 89,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-12-02"
+  },
+  {
+    "numero": 28,
+    "meganNumero": 49,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-12-02"
+  },
+  {
+    "numero": 39,
+    "meganNumero": 64,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-02"
+  },
+  {
+    "numero": 79,
+    "meganNumero": 71,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-12-01"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 24,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-12-01"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 19,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-12-01"
+  },
+  {
+    "numero": 80,
+    "meganNumero": 78,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-30"
+  },
+  {
+    "numero": 5,
+    "meganNumero": 32,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-30"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-30"
+  },
+  {
+    "numero": 73,
+    "meganNumero": 66,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-11-29"
+  },
+  {
+    "numero": 55,
+    "meganNumero": 82,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-29"
+  },
+  {
+    "numero": 25,
+    "meganNumero": 22,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-29"
+  },
+  {
+    "numero": 12,
+    "meganNumero": 17,
+    "in_reventado": 1,
+    "session": "manana",
+    "dia": "2025-11-28"
+  },
+  {
+    "numero": 78,
+    "meganNumero": 63,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-28"
+  },
+  {
+    "numero": 10,
+    "meganNumero": 46,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-28"
+  },
+  {
+    "numero": 31,
+    "meganNumero": 11,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-27"
+  },
+  {
+    "numero": 43,
+    "meganNumero": 62,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-27"
+  },
+  {
+    "numero": 87,
+    "meganNumero": 19,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-27"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 55,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-26"
+  },
+  {
+    "numero": 40,
+    "meganNumero": 21,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-26"
+  },
+  {
+    "numero": 29,
+    "meganNumero": 16,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-26"
+  },
+  {
+    "numero": 49,
+    "meganNumero": 88,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-25"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-25"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 59,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-25"
+  },
+  {
+    "numero": 4,
+    "meganNumero": 13,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-24"
+  },
+  {
+    "numero": 81,
+    "meganNumero": 62,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-24"
+  },
+  {
+    "numero": 38,
+    "meganNumero": 57,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-24"
+  },
+  {
+    "numero": 33,
+    "meganNumero": 11,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-23"
+  },
+  {
+    "numero": 62,
+    "meganNumero": 29,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-23"
+  },
+  {
+    "numero": 99,
+    "meganNumero": 26,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-23"
+  },
+  {
+    "numero": 49,
+    "meganNumero": 49,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-22"
+  },
+  {
+    "numero": 37,
+    "meganNumero": 98,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-22"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 85,
+    "in_reventado": 1,
+    "session": "tarde",
+    "dia": "2025-11-22"
+  },
+  {
+    "numero": 91,
+    "meganNumero": 66,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-21"
+  },
+  {
+    "numero": 45,
+    "meganNumero": 48,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-21"
+  },
+  {
+    "numero": 2,
+    "meganNumero": 96,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-21"
+  },
+  {
+    "numero": 7,
+    "meganNumero": 63,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-20"
+  },
+  {
+    "numero": 79,
+    "meganNumero": 5,
+    "in_reventado": 1,
+    "session": "mediaTarde",
+    "dia": "2025-11-20"
+  },
+  {
+    "numero": 88,
+    "meganNumero": 22,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-20"
+  },
+  {
+    "numero": 84,
+    "meganNumero": 17,
+    "in_reventado": 0,
+    "session": "manana",
+    "dia": "2025-11-19"
+  },
+  {
+    "numero": 56,
+    "meganNumero": 57,
+    "in_reventado": 0,
+    "session": "mediaTarde",
+    "dia": "2025-11-19"
+  },
+  {
+    "numero": 15,
+    "meganNumero": 21,
+    "in_reventado": 0,
+    "session": "tarde",
+    "dia": "2025-11-19"
+  }
+]

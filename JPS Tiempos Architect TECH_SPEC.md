@@ -21,7 +21,7 @@
 | Incrementos | Múltiplos de ₡100 |
 | Restricción rev | rev ≤ base siempre |
 | meganNumero | Número Mega Reventados, 00–99, independiente del Exacto |
-| Sorteos diarios | Mañana (~10:55) · Media tarde (~14:00) · Tarde (~18:00) |
+| Sorteos diarios | Mañana (12:55pm) · Media tarde (4:30pm) · Tarde (7:30pm) |
 
 ### Fórmula EV por ticket
 
@@ -35,6 +35,42 @@ EV = 0.01 × [14,000 + 13,333] − 400 = 273.33 − 400 = −₡126.67/sorteo
 ```
 
 El EV es siempre negativo. Esto es correcto y se muestra sin suavizar.
+
+**Apuesta óptima dentro de Exacto+Reventados**: con rev=0 (Exacto puro), el house edge es `−0.30 × base` → ROI = −30%. Es la jugada menos mala porque el Reventados tiene house edge 33% (peor por colón).
+
+### Modalidades completas (per reglas oficiales JPS)
+
+Cada modalidad es una jugada independiente. Inversión: ₡100 a ₡50,000 por jugada.
+
+| Modalidad | Pago | Prob | EV teórica por ₡100 |
+|---|---|---|---|
+| **Exacto** | 70× base | 1/100 | -₡30 |
+| **Reversible** | 35× | 2/100 (1/100 si palíndromo) | -₡30 |
+| **Primer número** | 7× | 1/10 | -₡30 |
+| **Terminación** | 7× | 1/10 | -₡30 |
+| **Reventados** | 200× rev | 1/100 × 1/3 = 1/300 (cond. Exacto + bola) | -₡33.33 |
+| **Mega Reventados** | 10× a 4000× | 6 casos (ver detalle abajo) | -₡43.7 |
+
+#### Detalle Mega Reventados (6 casos, cada uno con stake independiente Mega)
+
+| Caso | Exacto | Reventada | Mega | Pago Mega |
+|---|---|---|---|---|
+| 1 | ✓ acierta | ✓ sale | ✓ acierta | **4000×** + 70×Exacto + 200×Rev |
+| 2 | ✓ acierta | ✗ no sale | ✓ acierta | **1000×** + 70×Exacto |
+| 3 | ✓ acierta | ✓ sale | ✗ no acierta | **50×** + 70×Exacto + 200×Rev |
+| 4 | ✗ no acierta | ✓ sale | ✓ acierta | **20×** (solo Mega, sin Exacto) |
+| 5 | ✓ acierta | ✗ no sale | ✗ no acierta | **10×** + 70×Exacto |
+| 6 | ✗ no acierta | ✗ no sale | ✓ acierta | **10×** (solo Mega) |
+
+Probabilidades:
+- Caso 1: 1/100 × 1/3 × 1/100 = 1/30,000
+- Caso 2: 1/100 × 2/3 × 1/100 = 2/30,000
+- Caso 3: 1/100 × 1/3 × 99/100 = 99/30,000
+- Caso 4: 99/100 × 1/3 × 1/100 = 99/30,000
+- Caso 5: 1/100 × 2/3 × 99/100 = 198/30,000
+- Caso 6: 99/100 × 2/3 × 1/100 = 198/30,000
+
+EV Mega standalone por ₡1: `(4000+2000+4950+1980+1980+1980)/30000 = 0.563 → -₡43.7 / ₡100`.
 
 ---
 
@@ -295,15 +331,16 @@ weight = max(0.5, min(2.0, smoothed))
 
 El prior de 1.0 es uniforme. El floor de 0.5 impide peso cero para números no vistos.
 
-### 6.5 Peso combinado Exacto + Mega (75/25)
+### 6.5 Mega como fenómeno independiente
 
 ```
 weight_exacto = smooth(freq_exacto / expected)
-weight_mega   = smooth(freq_mega / expected_mega)     # fallback=1.0 si sin datos
-weight_combined = 0.75 × weight_exacto + 0.25 × weight_mega
+weight_mega   = smooth(freq_mega / expected_mega)
 ```
 
-Rango resultante: [0.5, 2.0].
+`weight_exacto` es el único peso usado para selección de tickets, backtesting y predicción del Exacto.
+`weight_mega` se conserva solo para reportar la distribución del Mega Reventados como serie separada.
+No se calcula peso combinado porque `meganNumero` es independiente del número Exacto.
 
 ### 6.6 Análisis de pares reverso
 

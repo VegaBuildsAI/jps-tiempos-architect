@@ -125,6 +125,21 @@ tr:hover td{background:#fafafa}
 .empty .ico{font-size:26px;margin-bottom:6px}
 .inf{font-size:11px;color:#888;margin-bottom:8px}
 
+/* EXACTO STRATEGY SIGNALS */
+.sig-card{background:#f8fbfa;border:1px solid #dcefe9;border-radius:9px;padding:11px 14px;margin-bottom:12px}
+.sig-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#0F6E56;margin-bottom:4px}
+.sig-sub{font-size:10.5px;color:#777;line-height:1.5;margin-bottom:8px}
+.sig-grid{display:grid;grid-template-columns:1.25fr 1.6fr .7fr .7fr;gap:0;border:1px solid #e7eeee;border-radius:7px;overflow:hidden;background:#fff}
+.sig-h,.sig-cell{padding:6px 8px;border-bottom:1px solid #eef3f1;font-size:11px}
+.sig-h{background:#eef8f4;color:#375c52;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.35px}
+.sig-cell:nth-last-child(-n+4){border-bottom:none}
+.sig-name{font-weight:800;color:#111}
+.sig-nums{font-family:monospace;font-weight:800;color:#0F6E56;letter-spacing:.6px}
+.sig-pos{color:#0F6E56;font-weight:800}
+.sig-neg{color:#B91C1C;font-weight:800}
+.sig-note{margin-top:8px;font-size:10.5px;color:#777;line-height:1.45}
+@media(max-width:760px){.sig-grid{grid-template-columns:1fr}.sig-h{display:none}.sig-cell{border-bottom:1px solid #eef3f1}.sig-cell::before{content:attr(data-lbl);display:block;font-size:9px;font-weight:800;text-transform:uppercase;color:#999;margin-bottom:2px}} 
+
 /* STATS BAR */
 .stats-bar{display:none;flex-wrap:wrap;gap:8px;padding:10px 0 2px}
 .stat-pill{display:flex;align-items:center;gap:5px;background:#f5f5f7;border:1px solid #e5e5e7;border-radius:20px;padding:4px 11px;font-size:11px;font-weight:600;color:#333;white-space:nowrap}
@@ -353,7 +368,7 @@ tr:hover td{background:#fafafa}
       </div>
       <div class="ch"><canvas id="fchart"></canvas></div>
       <div class="tw">
-        <table><thead><tr><th>#</th><th>Núm</th><th>Total</th><th>SI Rev</th><th>NO Rev</th><th>% SI</th><th>Visual</th><th>Peso</th><th>PesoE</th><th>PesoM</th><th>↔ Reverso</th></tr></thead>
+        <table><thead><tr><th>#</th><th>Núm</th><th>Total</th><th>SI Rev</th><th>NO Rev</th><th>% SI</th><th>Visual</th><th>Peso Exacto</th><th>Exacto</th><th>Mega aparte</th><th>↔ Reverso</th></tr></thead>
         <tbody id="ftb"></tbody></table>
       </div>
     </div>
@@ -375,6 +390,7 @@ tr:hover td{background:#fafafa}
   <div class="tp" id="tp-strat">
     <div class="empty" id="se"><div class="ico">🎯</div>Corre el Pipeline para generar la estrategia</div>
     <div id="sd" style="display:none">
+      <div id="strategy-signals"></div>
       <div class="tw">
         <table><thead><tr><th>#</th><th>Núm</th><th>Base</th><th>Reventado</th><th>Total</th><th>EV estimado</th><th>MC#</th><th>Freq#</th></tr></thead>
         <tbody id="stb"></tbody></table>
@@ -405,12 +421,12 @@ tr:hover td{background:#fafafa}
       <div class="arch-hdr" id="arch-hdr"></div>
       <div class="arch-grid">
         <div class="arch-card arch-ca">
-          <div class="arch-head arch-ha"><div class="arch-name">🎯 Set A — Estrategia</div><div class="arch-sub">Pipeline · MC top peso</div></div>
+          <div class="arch-head arch-ha"><div class="arch-name">🎯 Set A — Estrategia</div><div class="arch-sub">Pipeline · MC Exacto-only</div></div>
           <ul class="arch-list" id="alist-a"></ul>
           <div class="arch-foot" id="afoot-a"></div>
         </div>
         <div class="arch-card arch-cb">
-          <div class="arch-head arch-hb"><div class="arch-name">📊 Set B — Freq Elite</div><div class="arch-sub">Top peso+SI% · sin A</div></div>
+          <div class="arch-head arch-hb"><div class="arch-name">📊 Set B — Freq Elite</div><div class="arch-sub">Top peso Exacto+SI% · sin A</div></div>
           <ul class="arch-list" id="alist-b"></ul>
           <div class="arch-foot" id="afoot-b"></div>
         </div>
@@ -487,11 +503,13 @@ tr:hover td{background:#fafafa}
         <div>
           <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#0F6E56;padding-bottom:7px;border-bottom:2px solid #1D9E75;margin-bottom:10px">🌐 Global — todos los sorteos</div>
           <div id="ld-stats-g" style="margin-bottom:8px"></div>
+          <div id="ld-signals-g"></div>
           <div id="ld-arch-g"></div>
         </div>
         <div>
           <div id="ld-col-title" style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#C86A00;padding-bottom:7px;border-bottom:2px solid #C86A00;margin-bottom:10px">📍 Solo Media Tarde — aislado</div>
           <div id="ld-stats-s" style="margin-bottom:8px"></div>
+          <div id="ld-signals-s"></div>
           <div id="ld-arch-s"></div>
         </div>
       </div>
@@ -507,6 +525,26 @@ tr:hover td{background:#fafafa}
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const S={draws:[],lastResult:null,top25:[],mcRanked:[],simOut:null,revRate:1/3,totalValid:0,megaTop10:[],totalMega:0};
 let fCI=null,mcCI=null;
+const GLOBAL_FREQUENCY_PRIOR_COUNTS=[
+  105,107,99,106,132,110,96,111,93,117,
+  88,95,115,107,118,88,104,96,98,94,
+  107,120,120,95,109,90,104,124,88,106,
+  104,99,123,99,116,105,101,103,105,108,
+  97,106,105,90,124,110,107,100,107,110,
+  88,108,107,123,91,96,95,108,103,110,
+  120,104,105,98,106,99,101,96,99,129,
+  96,103,102,111,95,94,111,114,99,107,
+  97,101,101,104,95,104,107,102,114,113,
+  104,125,119,96,113,121,115,101,103,113
+];
+const STRATEGY_BACKTEST_META={
+  weekday_recent30:{hits:13,tests:104,roi:75.00},
+  weekday_recent30_plus_global_prior:{hits:11,tests:104,roi:48.08},
+  weekday_session_recent30:{hits:9,tests:104,roi:21.15},
+  weekday_session_plus_global_prior:{hits:8,tests:104,roi:7.69},
+  weekday_recent30_session_global:{hits:9,tests:104,roi:21.15},
+  global_frequency_prior:{hits:4,tests:104,roi:-46.15}
+};
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 const ts=()=>new Date().toTimeString().slice(0,8);
@@ -711,6 +749,7 @@ async function runPipeline(){
   log('[4/6] Generando estrategia de apuesta...');
   setProgress(88);await sleep(20);
   renderStrat(simOut,mcRanked.slice(0,nT),budget);
+  renderStrategySignals('strategy-signals',S.draws,localDateStr(),document.getElementById('ld-session')?.value||'manana');
   if(S.lastResult)renderLast(S.lastResult);
 
   // STEP 5: ANOMALÍAS
@@ -764,7 +803,7 @@ function computeTop25(draws){
     const wExacto=exp>0?Math.min(2,Math.max(0.5,0.8*(n.total/exp)+0.2)):1;
     const megaF=mfm.get(n.num)||0;
     const wMega=expM>0?Math.min(2,Math.max(0.5,0.8*(megaF/expM)+0.2)):1;
-    n.weight=+(0.75*wExacto+0.25*wMega).toFixed(4); // combined 75/25
+    n.weight=+wExacto.toFixed(4); // Exacto-only. Mega is tracked separately.
     n.weight_exacto=+wExacto.toFixed(4);
     n.weight_mega=+wMega.toFixed(4);
     n.mega_freq=megaF;
@@ -788,19 +827,115 @@ function computeTop25(draws){
   return{top25:sorted,revRate,total,revSI,megaTop10,totalMega};
 }
 
+// Exacto-only strategy signals. Mega is intentionally excluded from these picks.
+function dateOnly(v){return String(v||'').split('T')[0];}
+function localDateStr(d=new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function weekdayOf(dateStr){
+  const d=new Date(dateStr+'T12:00:00');
+  return isNaN(d.getTime())?null:d.getDay();
+}
+function rankExactoFromDraws(draws,limit=10){
+  if(!draws||draws.length<12)return[];
+  const counts=new Array(100).fill(0);let total=0;
+  for(const d of draws){
+    const n=parseInt(d.numero??-1);
+    if(!isNaN(n)&&n>=0&&n<=99){counts[n]++;total++;}
+  }
+  if(total<12)return[];
+  const exp=total/100;
+  return counts.map((count,num)=>{
+      const weight=exp>0?Math.min(2,Math.max(0.5,0.8*(count/exp)+0.2)):1;
+      return{num,num_str:String(num).padStart(2,'0'),count,weight};
+    })
+    .sort((a,b)=>b.weight!==a.weight?b.weight-a.weight:a.num-b.num)
+    .slice(0,limit);
+}
+function sameWeekdayDraws(draws,targetDate,session=null){
+  const targetWd=weekdayOf(targetDate);
+  if(targetWd==null)return[];
+  return(draws||[]).filter(d=>{
+    const ds=dateOnly(d.dia);
+    if(!ds||weekdayOf(ds)!==targetWd)return false;
+    return session?d.session===session:true;
+  });
+}
+function selectWeekdayRecent30(draws,targetDate,limit=10){
+  return rankExactoFromDraws(sameWeekdayDraws(draws,targetDate).slice(-30),limit);
+}
+function selectWeekdaySessionRecent30(draws,targetDate,session,limit=10){
+  const sDraws=sameWeekdayDraws(draws,targetDate,session);
+  if(sDraws.length<12)return selectWeekdayRecent30(draws,targetDate,limit);
+  return rankExactoFromDraws(sDraws.slice(-30),limit);
+}
+function selectGlobalFrequencyPrior(limit=10){
+  return GLOBAL_FREQUENCY_PRIOR_COUNTS.map((count,num)=>({
+      num,num_str:String(num).padStart(2,'0'),count,weight:count
+    }))
+    .sort((a,b)=>b.count!==a.count?b.count-a.count:a.num-b.num)
+    .slice(0,limit);
+}
+function rankVoteSignals(candidateLists,limit=10){
+  const votes=new Map();
+  candidateLists.filter(Boolean).forEach(list=>{
+    const seen=new Set(),unique=[];
+    list.forEach(item=>{
+      if(item&&!seen.has(item.num_str)){seen.add(item.num_str);unique.push(item);}
+    });
+    unique.forEach((item,idx)=>{
+      const cur=votes.get(item.num_str)||{...item,score:0};
+      cur.score+=(unique.length-idx);
+      votes.set(item.num_str,cur);
+    });
+  });
+  return[...votes.values()].sort((a,b)=>b.score!==a.score?b.score-a.score:a.num-b.num).slice(0,limit);
+}
+function computeExactoStrategySignals(draws,targetDate,session,limit=10){
+  const wr30=selectWeekdayRecent30(draws,targetDate,limit);
+  const ws30=selectWeekdaySessionRecent30(draws,targetDate,session,limit);
+  const gp=selectGlobalFrequencyPrior(limit);
+  return[
+    {key:'weekday_recent30',label:'weekday_recent30',nums:wr30,summary:'Mismo weekday, ultimos 30 sorteos'},
+    {key:'weekday_recent30_plus_global_prior',label:'weekday_recent30 + global prior',nums:rankVoteSignals([wr30,gp],limit),summary:'Recent weekday + frecuencia global larga'},
+    {key:'weekday_session_recent30',label:'weekday_session_recent30',nums:ws30,summary:'Mismo weekday + misma sesion, fallback a weekday'},
+    {key:'weekday_session_plus_global_prior',label:'weekday_session + global prior',nums:rankVoteSignals([ws30,gp],limit),summary:'Sesion reciente + frecuencia global larga'},
+    {key:'weekday_recent30_session_global',label:'weekday + sesion + global',nums:rankVoteSignals([wr30,ws30,gp],limit),summary:'Consenso de las tres senales'},
+    {key:'global_frequency_prior',label:'global_frequency_prior',nums:gp,summary:'Tabla global externa, Exacto-only'}
+  ];
+}
+function renderStrategySignals(elId,draws,targetDate,session,compact=false){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  const sessName=SESSION_NAMES[session]||session||'sesion';
+  const rows=computeExactoStrategySignals(draws,targetDate,session,10);
+  const body=rows.map(r=>{
+    const m=STRATEGY_BACKTEST_META[r.key]||{};
+    const nums=(r.nums||[]).slice(0,compact?5:10).map(n=>n.num_str).join(' · ')||'—';
+    const roi=m.roi==null?'—':(m.roi>=0?'+':'')+m.roi.toFixed(2)+'%';
+    const hit=m.hits==null?'—':m.hits+'/'+m.tests;
+    const cls=m.roi==null?'':m.roi>=0?'sig-pos':'sig-neg';
+    return `<div class="sig-cell sig-name" data-lbl="Estrategia">${r.label}<div style="font-weight:500;color:#999;font-size:10px;margin-top:2px">${r.summary}</div></div>`
+      +`<div class="sig-cell sig-nums" data-lbl="Numeros">${nums}</div>`
+      +`<div class="sig-cell" data-lbl="Backtest">${hit}</div>`
+      +`<div class="sig-cell ${cls}" data-lbl="ROI">${roi}</div>`;
+  }).join('');
+  el.innerHTML=`<div class="sig-card">`
+    +`<div class="sig-title">Nuevas estrategias Exacto-only</div>`
+    +`<div class="sig-sub">Target: <strong>${targetDate}</strong> · ${sessName}. Mega queda aislado: se muestra aparte, pero no vota en estos numeros.</div>`
+    +`<div class="sig-grid"><div class="sig-h">Estrategia</div><div class="sig-h">Top numeros</div><div class="sig-h">Hits</div><div class="sig-h">ROI</div>${body}</div>`
+    +`<div class="sig-note"><strong>Lectura:</strong> en el backtest local, <code>weekday_recent30</code> siguio arriba. El <code>global_frequency_prior</code> puro salio negativo; usalo como senal auditada, no como reemplazo.</div>`
+    +`</div>`;
+}
+
 // ── STEP 2: MC RANKING ────────────────────────────────────────────────────────
-// Uses combined weight: exacto 75% + mega 25% (same as jps_edge_tool.py)
+// Uses Exacto frequency only. Mega is displayed as a separate phenomenon.
 function rankMC(top25,draws,revRate,nSim){
   // Exacto frequency
   const freqE=new Array(100).fill(0.5);
   for(const d of draws){const n=parseInt(d.numero);if(!isNaN(n)&&n>=0&&n<=99)freqE[n]++;}
-  // Mega frequency
-  const freqM=new Array(100).fill(0.5);
-  for(const d of draws){const m=parseInt(d.meganNumero??-1);if(!isNaN(m)&&m>=0&&m<=99)freqM[m]++;}
-  // Combined weights 75/25
-  const combined=freqE.map((fe,i)=>0.75*fe+0.25*freqM[i]);
-  const totW=combined.reduce((a,b)=>a+b,0);
-  const cum=[];let c=0;for(const f of combined){c+=f/totW;cum.push(c);}
+  const totW=freqE.reduce((a,b)=>a+b,0);
+  const cum=[];let c=0;for(const f of freqE){c+=f/totW;cum.push(c);}
   const tracker=new Map(top25.map(n=>[n.num,{wins:0}]));
   for(let i=0;i<nSim;i++){
     const r=Math.random();let lo=0,hi=99;
@@ -832,14 +967,11 @@ function buildTickets(selected,budget,profile){
 function simulatePortfolio(selectedMC,draws,revRate,nSim,budget){
   const tickets=buildTickets(selectedMC,budget,document.getElementById('profile').value);
   const totStk=tickets.reduce((s,t)=>s+t.total,0);
-  // Combined frequency weights: exacto 75% + mega 25%
+  // Exacto frequency weights only. Mega is independent and not used here.
   const freqE=new Array(100).fill(0.5);
   for(const d of draws){const n=parseInt(d.numero);if(!isNaN(n)&&n>=0&&n<=99)freqE[n]++;}
-  const freqM=new Array(100).fill(0.5);
-  for(const d of draws){const m=parseInt(d.meganNumero??-1);if(!isNaN(m)&&m>=0&&m<=99)freqM[m]++;}
-  const freq=freqE.map((fe,i)=>0.75*fe+0.25*freqM[i]);
-  const totW=freq.reduce((a,b)=>a+b,0);
-  const cum=[];let c=0;for(const f of freq){c+=f/totW;cum.push(c);}
+  const totW=freqE.reduce((a,b)=>a+b,0);
+  const cum=[];let c=0;for(const f of freqE){c+=f/totW;cum.push(c);}
   // Simulate
   const nets=[];let wins=0;
   for(let i=0;i<nSim;i++){
@@ -956,7 +1088,7 @@ function renderMC(simOut,selectedMC){
   const mc=simOut.monte_carlo_result;
   const nSim=(mc.Simulaciones||0).toLocaleString();
   document.getElementById('mc-inf').textContent=
-    nSim+' simulaciones · Total apostado: '+fmtC(simOut.total_apostado)+' · Reventada observada: '+(S.revRate*100).toFixed(1)+'% · Pesos: frecuencias históricas';
+    nSim+' simulaciones · Total apostado: '+fmtC(simOut.total_apostado)+' · Reventada observada: '+(S.revRate*100).toFixed(1)+'% · Pesos Exacto-only';
   // Metrics grid
   const pG=mc['Probabilidad Ganar']||0;
   const pMed=mc['Mediana Neto']||0,pP95=mc['P95 Neto']||0,pAvg=mc['Promedio Neto']||0,pStd=mc['Desviacion Std']||0,pP5=mc['P5 Neto']||0;
@@ -1246,7 +1378,7 @@ function renderArchitect(top25,anom,simOut,budget,profile){
     return mkT(ns,{base:t.base||rawBase,rev:t.rev||rawRev});
   });
   const setAn=new Set(setA.map(t=>t.num_str));
-  // SET B: top-25 sort peso+SI% no A repeats
+  // SET B: top-25 sort by Exacto weight + SI%, no A repeats
   const dispB=[];const setB=[];
   [...top25].sort((a,b)=>b.weight!==a.weight?b.weight-a.weight:b.si_pct-a.si_pct).forEach(n=>{
     if(setAn.has(n.num_str)){if(dispB.length<8)dispB.push({...n,genieSource:'⬆ Top-B bloqueado por A'});}
@@ -1468,8 +1600,8 @@ function renderArchitectIntoEl(el,sets,simOut,budget){
   const avgWD=setD.length?setD.reduce((s,t)=>s+(t.weight||0),0)/setD.length:0;
   el.innerHTML=
     `<div class="arch-grid">`
-    +`<div class="arch-card arch-ca"><div class="arch-head arch-ha"><div class="arch-name">🎯 Set A — Estrategia</div><div class="arch-sub">Pipeline \xb7 MC top peso</div></div><ul class="arch-list">${setA.map(t=>row(t,'a')).join('')||empty}</ul><div class="arch-foot">${footHtml(setA,'arch-ef arch-ef-a','MC win%',pGan,100)}</div></div>`
-    +`<div class="arch-card arch-cb"><div class="arch-head arch-hb"><div class="arch-name">📊 Set B — Freq Elite</div><div class="arch-sub">Top peso+SI% \xb7 sin A</div></div><ul class="arch-list">${setB.map(t=>row(t,'b')).join('')||empty}</ul><div class="arch-foot">${footHtml(setB,'arch-ef arch-ef-b','Avg peso',avgWB,3)}</div></div>`
+    +`<div class="arch-card arch-ca"><div class="arch-head arch-ha"><div class="arch-name">🎯 Set A — Estrategia</div><div class="arch-sub">Pipeline \xb7 MC Exacto-only</div></div><ul class="arch-list">${setA.map(t=>row(t,'a')).join('')||empty}</ul><div class="arch-foot">${footHtml(setA,'arch-ef arch-ef-a','MC win%',pGan,100)}</div></div>`
+    +`<div class="arch-card arch-cb"><div class="arch-head arch-hb"><div class="arch-name">📊 Set B — Freq Elite</div><div class="arch-sub">Top peso Exacto+SI% \xb7 sin A</div></div><ul class="arch-list">${setB.map(t=>row(t,'b')).join('')||empty}</ul><div class="arch-foot">${footHtml(setB,'arch-ef arch-ef-b','Avg peso',avgWB,3)}</div></div>`
     +`<div class="arch-card arch-cc-border"><div class="arch-head arch-hc"><div class="arch-name">⇔ Set C — Reverso Edge</div><div class="arch-sub">Espejo top1+2 A,B \xb7 sin A∫B</div></div><ul class="arch-list">${setC.map(t=>row(t,'c')).join('')||empty}</ul><div class="arch-foot">${footHtml(setC,'arch-ef arch-ef-c','Avg peso',avgWC,3)}</div></div>`
     +`<div class="arch-card arch-cd"><div class="arch-head arch-hd"><div class="arch-name">🧞 Set D — The Genie</div><div class="arch-sub">Desplazados + iteraci\xf3n</div></div><ul class="arch-list">${setD.map(t=>row(t,'d')).join('')||empty}</ul><div class="arch-foot">${footHtml(setD,'arch-ef arch-ef-d','Avg peso',avgWD,3)}</div></div>`
     +`</div>`;
@@ -1633,6 +1765,8 @@ async function runLiveDay(){
   // ── Render stats & grids ─────────────────────────────────────────────
   document.getElementById('ld-stats-g').innerHTML=statsHtml(gTop25,gAnom,gTotal);
   document.getElementById('ld-stats-s').innerHTML=statsHtml(sTop25,sAnom,sTotal);
+  renderStrategySignals('ld-signals-g',gDraws,targetDate,sess,true);
+  renderStrategySignals('ld-signals-s',baseDraws,targetDate,sess,true);
   renderArchitectIntoEl(document.getElementById('ld-arch-g'),gSets,gSim,budget);
   renderArchitectIntoEl(document.getElementById('ld-arch-s'),sSets,sSim,budget);
 

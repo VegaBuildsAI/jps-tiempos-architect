@@ -35,11 +35,24 @@ What it is **not**: a predictor. EV is always negative. That is shown without so
 | Constraint | rev ≤ base always |
 | Daily draws | Mañana ~10:55 · Media tarde ~14:00 · Tarde ~18:00 |
 
-**EV formula per ticket:**
+**EV formula per ticket (Exacto + Reventados):**
 ```
 EV = (1/100) × [70 × base + (1/3) × 200 × rev] − (base + rev)
 ```
-Example — base ₡200, rev ₡200: `EV = −₡126.67 / draw`
+Example — base ₡200, rev ₡200: `EV = −₡126.67 / draw`. Setting `rev = 0` (Exacto-only) reduces house edge to **-30%** (best Exacto play).
+
+JPS Tiempos offers 6 betting modalities — each is an independent bet (₡100 to ₡50,000):
+
+| Modality | Pays | Hit probability | EV per ₡100 stake | House edge |
+|---|---|---|---|---|
+| Exacto | 70× | 1/100 | -₡30 | 30% |
+| Reversible | 35× | 2/100 (palindrome: 1/100) | -₡30 | 30% |
+| Primer número | 7× | 1/10 | -₡30 | 30% |
+| Terminación | 7× | 1/10 | -₡30 | 30% |
+| Reventados | 200× | 1/100 × 1/3 = 1/300 | -₡33.33 | 33% |
+| Mega Reventados | 10× to 4000× | varies (6 cases) | ~-₡44 | 44% |
+
+All modalities have negative EV by design. Lower-multiplier modalities (Primer, Terminación) trade variance for hit-rate at the same expected loss.
 
 ---
 
@@ -102,6 +115,71 @@ python jps_edge_tool.py run --budget 5000 --n 5 --profile balanced
 
 ---
 
+## Backtesting & Live Prediction
+
+Three additional scripts that turn the bet engine into a measurable, auditable system:
+
+### Backtest (walk-forward 80/20)
+
+Validates the calibration of every selection strategy against historical results, without data leakage. Compares Exacto-only strategies — `architect_balanced/conservative/aggressive`, the Architect Sets A–D (ported from the JS dashboard to Python), `freq_only`, `cold_numbers`, and `random_uniform` as the baseline. Mega is analyzed separately and is not used to select Exacto numbers.
+
+```bash
+python jps_edge_tool.py fetch --mode history --days 180   # ≥150 days recommended
+python jps_backtest.py --budget 5000 --n 5                # ~1 min for 100 test sessions
+```
+
+Outputs:
+- `backtest_report.json` — per-strategy aggregate metrics (ROI, hit rate, std, percentiles, drawdowns, permutation-test p-values vs baseline)
+- `backtest_sessions.json` — per-session log for every strategy (useful for deep dives)
+- `backtest_summary.md` — human-readable report with verdict, profile comparison, sanity checks, and tuning suggestions
+
+**Important — what the backtest can and cannot tell you**: an honest lottery has fixed negative EV (`−₡126.67/draw` for `base=rev=₡200`). No selection strategy changes that in expectation. The backtest is useful for: (1) validating the implementation has no bugs (the system should statistically tie with random), (2) measuring variance across profiles, (3) detecting RNG anomalies if any, (4) building discipline. It is **not** a tool for predicting which numbers will come out.
+
+### Live prediction logging
+
+Generate a prediction for the next draw and record it in an append-only JSONL log:
+
+```bash
+python jps_predict.py --session manana                  # default strategy: architect_balanced
+python jps_predict.py --session tarde --strategy set_a  # use Architect Set A
+python jps_predict.py --session mediaTarde --strategy set_c_reverso_edge --budget 10000
+```
+
+Strategies available: `architect_balanced`, `architect_conservative`, `architect_aggressive`, `set_a`, `set_b_freq_elite`, `set_c_reverso_edge`, `set_d_genie`, `freq_only`, `cold_numbers`, `weekday_recent30`, `weekday_session_recent30`, `weekday_recent15`, `weekday_consensus_exacto`, `weekday_inverse_recent`, `weekday_specific`, `session_specific`, `decay_recent`, `inverse_recent`, `signal_only_play`, `exacto_signal_gate`, `multi_strategy_ensemble`, `concentrated_top1`, `adaptive`.
+
+Predictions are stored in `predictions_log.jsonl` with full metadata (timestamp, tickets, weights snapshot, status=pending). One line per prediction. Never overwritten — reconciliation appends new lines.
+
+### Reconciliation
+
+After the draw, fetch the result and cross-reference pending predictions:
+
+```bash
+python jps_edge_tool.py fetch --mode history --days 7   # bring fresh results
+python jps_reconcile.py                                 # process all pending
+python jps_reconcile.py --since 2026-05-01              # filter by date
+python jps_reconcile.py --dry-run                       # preview without writing
+```
+
+The reconciler matches each pending prediction against `historical_data.json` by `draw_date + session`, computes the outcome using the same `payout_ticket()` logic as `audit`, and appends a `status: reconciled` line. The accumulated track record (total hit rate, ROI, breakdown by strategy) is printed each run.
+
+Operational flow:
+
+```
+                      ┌────────────────┐
+                      │ jps_predict.py │  ←─ 1h before draw
+                      └────────┬───────┘
+                               │ append pending
+                               ▼
+                      predictions_log.jsonl
+                               ▲
+                               │ append reconciled
+       ┌──────────────────┐    │
+       │ jps_reconcile.py │────┘  ←─ after draw + fetch
+       └──────────────────┘
+```
+
+---
+
 ## File structure
 
 ```
@@ -110,14 +188,25 @@ jps_accumulate.py         ← Daily data accumulator
 simulador.py              ← Standalone Monte Carlo engine
 jps_server.py             ← Local HTTP server :7788
 jps_console_v2.html       ← Standalone dashboard (no server required)
+jps_backtest.py           ← Walk-forward 80/20 backtester (11 strategies)
+jps_predict.py            ← Pre-draw prediction → predictions_log.jsonl
+jps_reconcile.py          ← Post-draw reconciliation + track record
 
-# Runtime files — not tracked in git, generated by the tool:
+# Runtime files — not tracked in git, generated by the tools:
 historical_data.json      ← Working dataset (fetch --mode history)
 historical_accumulated.json ← Master accumulator (dict by YYYY-MM-DD)
 last_result.json          ← Latest draw result
+jps_page_data.json        ← Official /page API response (recent page draws)
+jps_page_stats.json       ← Imported official page frequency tables
+global_frequency_prior.json ← Official Exacto page-frequency prior
+mega_frequency_prior.json ← Official Mega page-frequency prior (separate)
 analysis_report.json      ← Full statistical report
 input.json / output.json  ← Current bet config + Monte Carlo results
 audit_result.json         ← Post-draw audit
+backtest_report.json      ← Backtest metrics per strategy
+backtest_sessions.json    ← Per-session backtest log
+backtest_summary.md       ← Human-readable backtest report
+predictions_log.jsonl     ← Live prediction track record (append-only)
 ```
 
 ---
@@ -136,6 +225,16 @@ Data source: `https://integration.jps.go.cr`
 |---|---|---|
 | `/api/App/nuevostiempos/last` | GET | Last draw (mañana, mediaTarde, tarde) |
 | `/api/App/nuevostiempos/historical` | GET | Historical by date range (`fechaInicio`, `fechaFin`) |
+| `/api/App/nuevostiempos/page` | GET | Official page payload with recent Nuevos Tiempos draws |
+
+Useful commands:
+
+```bash
+python jps_edge_tool.py fetch --mode page
+python jps_edge_tool.py import-page-stats --file pasted-page-stats.txt
+```
+
+`import-page-stats` imports the official frequency tables rendered on the JPS page, such as "Frecuencia de Números Ganadores" and "Mega Números Ganadores". Those tables are kept separate from `historical_data.json`: Exacto goes into `global_frequency_prior.json`, and Mega goes into `mega_frequency_prior.json`.
 
 ---
 
