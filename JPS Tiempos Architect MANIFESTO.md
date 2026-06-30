@@ -92,5 +92,31 @@ Lo que no cambia: el compromiso con la transparencia, el rigor matemático, y la
 
 ---
 
+## El veredicto empírico
+
+El laboratorio no se quedó en la teoría. Se construyó una batería de 22 tests estadísticos independientes — clásicos, NIST SP 800-22, DIEHARD — para responder una pregunta concreta: ¿el RNG de JPS tiene algún sesgo explotable?
+
+**Los 22 tests aceptan H0.** Ninguno encuentra desviación de aleatoriedad pura. Ningún backtest de estrategia sobrevive corrección por comparaciones múltiples. El EV permanece fijo en -30% para Exacto, peor para Reventados y Mega.
+
+Esto no es una limitación del proyecto — es su validación más fuerte. El Principio 2 (Rigor sobre optimismo) no es una pose: es lo que el proyecto encontró cuando se puso a prueba a sí mismo, con las mismas herramientas con las que analiza los sorteos.
+
+> *"Si la lotería fuera matemáticamente vencible, JPS estaría en bancarrota. Que sigan operando es evidencia empírica de que no hay edge."*
+
+La recomendación que se sigue de esto es directa: este sistema es para **paper trading y ejercicio académico**, no para apostar dinero real esperando vencer la casa. Quien use The Architect para apostar, apuesta sabiendo exactamente cuál es su desventaja matemática — no por ignorarla.
+
+---
+
+## De laboratorio local a servicio vivo
+
+El sistema ahora corre 24/7, accesible desde cualquier navegador, con sesión y login. Este cambio es de **infraestructura**, no de filosofía — y vale la pena decirlo explícitamente para que nunca se confundan.
+
+- **El login no es exclusividad, es higiene operativa.** Antes el laboratorio vivía en una laptop; ahora vive en un servidor público. Una pantalla de acceso es lo mínimo razonable para algo que escribe en un volumen persistente y consulta un API externo en nombre de quien sea que lo abra.
+- **El pipeline corre solo, pero no decide solo.** Que el sistema haga fetch, analice y simule automáticamente al entrar no cambia su naturaleza: sigue siendo un espejo de los datos históricos, no un oráculo. La automatización ahorra clics, no incertidumbre.
+- **La disponibilidad no es una promesa de resultado.** Que The Architect esté siempre prendido y respondiendo en segundos no implica que esté más cerca de "saber" qué número va a salir. El veredicto del §"Veredicto empírico" no cambia porque el servidor nunca se apague.
+
+El laboratorio creció en alcance. No creció en certeza — porque no podía: la aleatoriedad no negocia con la infraestructura.
+
+---
+
 *JPS Tiempos Lab — análisis estadístico para Nuevos Tiempos Reventados, Costa Rica.*
 *Construido con Python, estadística clásica, y respeto por la aleatoriedad.*

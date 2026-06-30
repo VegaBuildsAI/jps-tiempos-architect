@@ -1,9 +1,10 @@
 # JPS Tiempos Lab — Technical Specification
 
-**Versión:** 2.0  
-**Juego:** Nuevos Tiempos Reventados — JPS Costa Rica  
-**Moneda:** Colones Costarricenses (₡)  
-**Plataforma:** Python 3.10+ · Windows/macOS/Linux · Navegador moderno
+**Versión:** 3.0
+**Juego:** Nuevos Tiempos Reventados — JPS Costa Rica
+**Moneda:** Colones Costarricenses (₡)
+**Plataforma:** Python 3.10+ · Windows/macOS/Linux · Navegador moderno · Docker/Railway (producción)
+**Estado:** Desplegado en vivo (Railway) — ver §18
 
 ---
 
@@ -81,40 +82,61 @@ JPS Tiempos Architect/
 ├── jps_edge_tool.py          ← CLI principal (7 comandos)
 ├── jps_accumulate.py         ← Acumulador diario de datos
 ├── simulador.py              ← Motor Monte Carlo (standalone)
-├── jps_server.py             ← Servidor HTTP local :7788
-├── jps_console_v2.html       ← Dashboard standalone (sin servidor)
+├── jps_server.py             ← Servidor HTTP (login + auto-pipeline + scheduler)
+├── jps_console_v2.html       ← Dashboard principal (servido en "/")
+├── dashboard.html             ← Dashboard editorial alternativo (fallback)
+├── jps_backtest.py           ← Backtester walk-forward 80/20 (22 estrategias)
+├── jps_predict.py            ← Predicción pre-sorteo → predictions_log.jsonl
+├── jps_reconcile.py          ← Reconciliación post-sorteo + bandit update
+├── jps_bandit.py             ← Multi-armed bandit (Thompson Sampling)
+├── jps_randomness_tests.py   ← 8 tests clásicos de aleatoriedad
+├── jps_nist_sts.py           ← 8 tests NIST SP 800-22
+├── jps_diehard.py            ← 9 tests DIEHARD (6 válidos, 3 marcados _broken)
+│
+├── Dockerfile                 ← Imagen de producción (python:3.12-slim)
+├── railway.json               ← Config de build/deploy para Railway
+├── assets/brand/               ← CSS + logo del dashboard editorial
 │
 ├── historical_accumulated.json   ← Archivo maestro (dict por YYYY-MM-DD)
 ├── historical_data.json          ← Dataset de trabajo (lista de día-objetos)
 ├── last_result.json              ← Último sorteo del API
 ├── analysis_report.json          ← Reporte estadístico completo
 ├── analysis_session_{s}.json     ← Reporte filtrado por sesión
-├── input.json                    ← Configuración de apuesta actual
-├── output.json                   ← Resultados Monte Carlo
+├── input.json / output.json      ← Configuración de apuesta + Monte Carlo
 ├── audit_result.json             ← Auditoría post-sorteo
+├── predictions_log.jsonl         ← Track record de predicciones (append-only)
+├── backtest_report.json / backtest_sessions.json / backtest_summary.md
+├── bandit_state.json              ← Estado persistente del bandit (α, β por estrategia)
 └── accumulate_log.txt            ← Log del acumulador
 ```
 
 ### Capas
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              INTERFAZ DE USUARIO                    │
-│   jps_console_v2.html          Embedded Dashboard  │
-│   (standalone · file upload)   (via jps_server.py) │
-├─────────────────────────────────────────────────────┤
-│              MOTOR DE ANÁLISIS                      │
-│   jps_edge_tool.py  (analyze · bet · simulate · …) │
-├─────────────────────────────────────────────────────┤
-│              MOTOR DE SIMULACIÓN                    │
-│   simulador.py   (Monte Carlo portfolio)            │
-├─────────────────────────────────────────────────────┤
-│              CAPA DE DATOS                          │
-│   jps_accumulate.py  +  JSON files                 │
-├─────────────────────────────────────────────────────┤
-│              FUENTE EXTERNA                         │
-│   JPS API  https://integration.jps.go.cr           │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    ACCESO Y SESIÓN                            │
+│   /login (pantalla)  ·  cookie de sesión  ·  Basic Auth compat │
+├──────────────────────────────────────────────────────────────┤
+│                    INTERFAZ DE USUARIO                        │
+│   jps_console_v2.html (default en "/")  ·  dashboard.html     │
+│   Auto-run on entry: /api/auto/run dispara el pipeline        │
+├──────────────────────────────────────────────────────────────┤
+│                    MOTOR DE ANÁLISIS                          │
+│   jps_edge_tool.py  (analyze · bet · simulate · audit · run)  │
+├──────────────────────────────────────────────────────────────┤
+│           MOTORES DE VALIDACIÓN Y APRENDIZAJE                 │
+│   jps_backtest.py  ·  jps_predict.py / jps_reconcile.py       │
+│   jps_bandit.py  ·  jps_randomness_tests / nist_sts / diehard │
+├──────────────────────────────────────────────────────────────┤
+│                    MOTOR DE SIMULACIÓN                        │
+│   simulador.py   (Monte Carlo portfolio)                      │
+├──────────────────────────────────────────────────────────────┤
+│                    CAPA DE DATOS                              │
+│   jps_accumulate.py  +  JSON files  +  volumen persistente    │
+├──────────────────────────────────────────────────────────────┤
+│                    FUENTE EXTERNA                              │
+│   JPS API  https://integration.jps.go.cr                      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -207,6 +229,15 @@ JPS Tiempos Architect/
 }
 ```
 
+### 3.6 `predictions_log.jsonl` — Track record (append-only, una línea por evento)
+
+```jsonl
+{"id":"2026-06-26-manana-architect_balanced","draw_date":"2026-06-26","session":"manana","strategy":"architect_balanced","tickets":[...],"status":"pending","predicted_at":"2026-06-26T11:15:00"}
+{"id":"2026-06-26-manana-architect_balanced","status":"reconciled","hit_exacto":false,"neto":-2000,"roi":-1.0,"reconciled_at":"2026-06-26T13:30:00"}
+```
+
+Cada predicción se identifica por `id` (derivado de fecha+sesión+estrategia). El reconciliador busca el resultado oficial por `draw_date + session` y **agrega** una nueva línea con `status: "reconciled"` — nunca sobrescribe ni borra la línea `pending` original. El estado "actual" de una predicción es siempre la última línea con ese `id`.
+
 ---
 
 ## 4. `jps_edge_tool.py` — CLI principal
@@ -246,6 +277,15 @@ JPS Tiempos Architect/
 8. remanente = budget − (ticket_amount × n_tickets)
 ```
 
+### 4.4 `data_path()` — Resolución de directorio de datos
+
+```python
+DATA_DIR = os.environ.get("JPS_DATA_DIR", HERE)
+def data_path(filename): return os.path.join(DATA_DIR, filename)
+```
+
+En local, `JPS_DATA_DIR` no está seteada → todo vive junto al código (`HERE`). En Railway, `JPS_DATA_DIR=/data` apunta al volumen persistente — independiente del directorio de la app, que se reconstruye en cada deploy.
+
 ---
 
 ## 5. `jps_accumulate.py` — Acumulador
@@ -271,6 +311,7 @@ for rec in new_records:
 - Acepta correcciones del API si el dato cambió
 - Escribe `historical_accumulated.json` (dict) y `historical_data.json` (lista)
 - Hace fetch de los últimos 180 días para capturar correcciones recientes
+- **Bug conocido**: puede tener timeout en ventanas de 180 días bajo ciertas condiciones de red — el fetch directo (`jps_edge_tool.py fetch --mode history --days N`) es más confiable (ver `LEARNINGS.md`)
 
 ---
 
@@ -388,38 +429,107 @@ wins = count(r > 0 for r in results)
 
 ---
 
-## 8. `jps_server.py` — Servidor HTTP local
+## 8. `jps_server.py` — Servidor HTTP
 
-### Endpoints
+### 8.1 Resolución de PORT y HOST
 
-| Path | Método | Descripción |
-|---|---|---|
-| `GET /` | HTML | Sirve el dashboard embebido |
-| `GET /api/status` | JSON | Estado: sorteos en memoria, has_output, has_last |
-| `GET /api/last` | JSON | Llama API JPS → guarda → retorna |
-| `GET /api/pipeline?budget=N&n=N&profile=P&days=D&nsim=N` | JSON | Pipeline completo: fetch → analyze → build → simulate |
-| `GET /api/state` | JSON | Estado actual: top25, output, last |
-| `GET /api/auto` | JSON | Estado del pipeline asíncrono |
+```python
+def _resolve_port():
+    # Prioridad: env PORT (Railway lo inyecta) → arg CLI numérico (local) → 7788.
+    env_p = os.environ.get("PORT", "")
+    if env_p.isdigit():
+        return int(env_p)
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        return int(sys.argv[1])
+    return 7788
 
-### Pipeline del servidor (5 pasos)
+HOST = os.environ.get("JPS_HOST", "0.0.0.0")   # 0.0.0.0 = alcanzable desde fuera del contenedor
+```
+
+`PORT` se lee directamente del entorno porque Railway invoca `deploy.startCommand` **sin shell** — un argumento como `${PORT:-7788}` llegaría como string literal y rompería `int(sys.argv[1])`. Resolver el puerto dentro de Python (en vez de depender de expansión de shell) hace el arranque robusto en cualquier plataforma.
+
+### 8.2 Endpoints
+
+| Path | Método | Auth | Descripción |
+|---|---|---|---|
+| `GET /` | HTML | Sí (redirige a `/login`) | Sirve `jps_console_v2.html` (fallback: `dashboard.html` → HTML embebido) |
+| `GET /login` | HTML | No | Pantalla de login |
+| `POST /login` | Form/JSON | No | Valida credenciales, setea cookie de sesión, redirige |
+| `GET /logout` | — | No | Limpia la cookie de sesión |
+| `GET /api/status` | JSON | No (healthcheck) | `{draws, top25, has_out, has_last}` |
+| `GET /api/last` | JSON | Sí | Llama API JPS → guarda → retorna |
+| `GET /api/pipeline?budget=N&n=N&profile=P&days=D&nsim=N` | JSON | Sí | Pipeline completo: fetch → analyze → build → simulate → reconcile |
+| `GET /api/auto/run` | JSON | Sí | Dispara el pipeline en background (o reusa caché); no bloquea |
+| `GET /api/auto` | JSON | Sí | Estado del pipeline asíncrono: `status, log, result, fresh, age` |
+| `GET /api/state` | JSON | Sí | Estado actual: top25, output, last |
+| `GET /assets/*` | estático | Sí | CSS/logo del dashboard editorial |
+| `GET /historical_data.json` etc. | estático | Sí | Sirve los JSON de datos desde `DATA_DIR` |
+| `POST /api/commit` / `POST /api/skip` | JSON | Sí | Acciones de paper-trading sobre una predicción pendiente |
+
+Rutas públicas (`/login`, `/logout`, `/api/status`) existen para permitir el healthcheck de Railway y el flujo de login sin requerir sesión previa.
+
+### 8.3 Pipeline (`pipeline()`, 5 pasos)
 
 1. **Fetch histórico** — API JPS → `historical_data.json`
 2. **Fetch último** — API JPS → `last_result.json`
 3. **Análisis** — `compute_top25()` + `compute_anomalies()` → `analysis_report.json`
 4. **Build + simulate** — `build_input_json()` → `input.json` → `simulador.py` → `output.json`
-5. **Respuesta** — JSON completo con top25, anomalías, MC, último resultado
+5. **Respuesta** — JSON completo con `top25`, `anomalies`, MC, último resultado, **y el histórico crudo (`historical`)**
+
+El campo `historical` en la respuesta existe para que el dashboard pueda cargar los sorteos directamente del resultado del pipeline, sin depender de releer `historical_data.json` desde disco — relevante en Railway, donde `DATA_DIR` (`/data`) es distinto del directorio de la app.
+
+### 8.4 Auto-pipeline (run-on-entry)
+
+```python
+STATE["auto_status"]      # idle | running | done | error
+STATE["auto_log"]         # líneas de progreso, streamed al cliente
+STATE["auto_result"]      # resultado completo de pipeline() + reconcile
+STATE["auto_started_at"]  # epoch del último "done", para el TTL de caché
+
+AUTO_CACHE_TTL = int(os.environ.get("JPS_AUTO_TTL", "600"))   # 10 min por defecto
+```
+
+`trigger_auto(params)`:
+- Si hay un resultado `done` más reciente que `AUTO_CACHE_TTL` → lo reusa (`cached: true`), sin tocar el API JPS.
+- Si ya hay una corrida `running` → no lanza una segunda (protegido con `threading.Lock`).
+- Si no hay nada fresco → lanza `_run_auto_pipeline()` en un thread daemon: corre `pipeline()` y luego `jps_reconcile.py` como subprocess, y actualiza `STATE` al terminar.
+
+El cliente (`jps_console_v2.html` / `dashboard.html`) llama `GET /api/auto/run` al entrar y, si no hay caché fresca, hace polling de `GET /api/auto` cada 1.5s mostrando el log en un overlay, hasta `status: done | error`.
+
+### 8.5 Scheduler diario (background thread)
+
+```python
+SCHEDULE = [
+    (12,  5, "predict",         ["--session", "manana",     "--strategy", "adaptive", "--force"]),
+    (13, 30, "fetch_reconcile", None),
+    (15, 40, "predict",         ["--session", "mediaTarde", "--strategy", "adaptive", "--force"]),
+    (17,  0, "fetch_reconcile", None),
+    (18, 40, "predict",         ["--session", "tarde",      "--strategy", "adaptive", "--force"]),
+    (20,  0, "fetch_reconcile", None),
+]
+```
+
+Corre en un thread daemon (`start_scheduler()`), chequea cada ~45s, y usa `_last_run_per_slot` para no ejecutar el mismo slot dos veces el mismo día. `fetch_reconcile` siempre pide `--days 180` (no incremental) porque `fetch` sobreescribe `historical_data.json`.
 
 ---
 
-## 9. `jps_console_v2.html` — Dashboard standalone
+## 9. `jps_console_v2.html` — Dashboard principal
 
-### Características
+Servido por defecto en `GET /` (antes era `dashboard.html`; ver Changelog §21). Es la consola analítica densa: 6 pestañas, carga de archivos manual, y datos demo — todo corre client-side en JavaScript puro.
 
-- **Sin servidor**: toda la computación ocurre en el navegador (JavaScript puro)
-- **Carga de archivos**: `historical_data.json` + `last_result.json` via file picker
-- **Datos demo**: 540 sorteos sintéticos con sesgos por sesión para testing
+### 9.1 Auto-entry (carga automática al abrir)
 
-### Pipeline en JavaScript (6 pasos)
+```
+1. GET /api/auto/run         → dispara pipeline (o reusa caché del server)
+2. poll GET /api/auto        → overlay de progreso hasta done/error
+3. S.draws  ← result.historical (fallback: GET /historical_data.json)
+4. S.lastResult ← result.last_result
+5. runPipeline()              → renderiza las 6 pestañas con datos reales
+```
+
+Si no hay servidor disponible (archivo abierto directo) o el fetch falla, `autoEntry()` no hace nada y deja los controles manuales intactos: **🎲 Datos Demo**, carga de archivo, y **▶ Pipeline Completo**.
+
+### 9.2 Pipeline en JavaScript (6 pasos, `runPipeline()`)
 
 | Paso | Función | Descripción |
 |---|---|---|
@@ -430,13 +540,17 @@ wins = count(r > 0 for r in results)
 | 5 | `computeAnomaliesJS()` | Motor de anomalías (espeja Python) |
 | 6 | `renderArchitect()` | The Architect Sets A–D |
 
-### Live Sesión (tab exclusivo del standalone)
+### 9.3 Live Sesión (tab exclusivo)
 
 Permite análisis aislado por sesión con control de fecha:
 - **Global**: corpus completo antes de la fecha objetivo
 - **Aislado**: solo sorteos de esa sesión (mañana / media tarde / tarde)
 - Muestra The Architect Sets para ambos corpus en paralelo
 - Usa `buildArchitectSets()` como función separada (sin DOM) para reutilización
+
+### 9.4 `dashboard.html` — Fallback editorial
+
+Mantiene su propio `startAuto()` con la misma lógica de auto-entry y caché. Se usa solo si `jps_console_v2.html` no existe en el deploy.
 
 ---
 
@@ -524,15 +638,203 @@ roi        = neto / (base + rev)
 
 ---
 
-## 13. Requerimientos técnicos
+## 13. `jps_backtest.py` — Backtesting walk-forward
+
+Valida la calibración de cada estrategia de selección contra resultados históricos reales, sin data leakage (split 80/20, walk-forward).
+
+**Estrategias evaluadas (22):** `architect_balanced/conservative/aggressive`, los Architect Sets A–D portados de JS a Python, `freq_only`, `cold_numbers`, `random_uniform` (baseline), y la familia `weekday_*` / `session_specific` / `decay_recent` / `inverse_recent` / `signal_only_play` / `exacto_signal_gate` / `multi_strategy_ensemble` / `concentrated_top1` / `adaptive` (ver lista completa en `README.md`).
+
+**Outputs:**
+- `backtest_report.json` — métricas agregadas por estrategia (ROI, hit rate, std, percentiles, drawdowns, p-values de permutation test vs. baseline)
+- `backtest_sessions.json` — log por sesión de cada estrategia
+- `backtest_summary.md` — reporte humano con veredicto, comparación de perfiles y sanity checks
+
+**Hallazgo central (ver `LEARNINGS.md`):** ningún edge sobreviviente a corrección por comparaciones múltiples (Bonferroni). El sistema es estadísticamente consistente con EV fijo de -30%. El backtest es útil para validar que la implementación no tiene bugs y para medir varianza — no para predecir qué número va a salir.
+
+---
+
+## 14. `jps_predict.py` + `jps_reconcile.py` — Predicción y reconciliación en vivo
+
+### Predicción (`jps_predict.py`)
+
+```bash
+python jps_predict.py --session manana --strategy adaptive
+```
+
+Genera tickets para la próxima fecha+sesión usando la estrategia indicada, y los **agrega** (nunca sobrescribe) a `predictions_log.jsonl` con `status: "pending"`. `_load_existing_ids()` evita duplicar una predicción pendiente para la misma fecha+sesión+estrategia.
+
+### Reconciliación (`jps_reconcile.py`)
+
+```bash
+python jps_reconcile.py            # procesa todas las pending
+python jps_reconcile.py --dry-run  # preview sin escribir
+```
+
+`_reconcile_one()` busca el resultado oficial por `draw_date + session` en `historical_data.json`, calcula el resultado con la misma lógica de `audit` (§11), y agrega una línea `status: "reconciled"`. Imprime el track record acumulado (hit rate total, ROI, breakdown por estrategia) en cada corrida — y, si el bandit está activo, actualiza sus parámetros (§15).
+
+### Flujo operativo
+
+```
+                      ┌────────────────┐
+                      │ jps_predict.py │  ←─ 1h antes del sorteo (scheduler §8.5)
+                      └────────┬───────┘
+                               │ append pending
+                               ▼
+                      predictions_log.jsonl
+                               ▲
+                               │ append reconciled
+       ┌──────────────────┐    │
+       │ jps_reconcile.py │────┘  ←─ después del sorteo + fetch
+       └──────────────────┘
+```
+
+---
+
+## 15. `jps_bandit.py` — Multi-armed bandit adaptativo
+
+Selecciona qué estrategia de predicción usar dinámicamente mediante **Thompson Sampling**, en vez de fijar una sola estrategia "campeona" del backtest.
+
+### Modelo
+
+```
+Cada estrategia i tiene un estado Beta(α_i, β_i), inicializado en (1, 1) — prior uniforme.
+
+Tras cada reconciliación:
+    si hit_exacto:     α_i += 1
+    si no hit_exacto:  β_i += 1
+
+Selección (Thompson sample):
+    sample_i ~ Beta(α_i, β_i)   para cada estrategia i
+    elegida = argmax_i(sample_i)
+
+Media posterior: E[p_i] = α_i / (α_i + β_i)
+```
+
+El sampling natural de la distribución Beta provee exploración (estrategias con poca data tienen samples más dispersos) sin necesitar un parámetro de exploración explícito (ε-greedy, UCB, etc.).
+
+### Bootstrapping
+
+- `bootstrap_from_backtest(state)` — inicializa α/β usando los resultados agregados de `backtest_sessions.json` (útil al arrancar el bandit con historia ya simulada).
+- `bootstrap_from_history(state)` — inicializa desde el track record real de `predictions_log.jsonl`.
+
+Estado persistido en `bandit_state.json`, servido también por el dashboard (`GET /bandit_state.json`) para mostrar la tabla de exploración en vivo (α, β, n_picks, mean ± std).
+
+La estrategia `adaptive` usada por el scheduler (§8.5) delega en `BanditState` para elegir qué estrategia ejecutar en cada predicción.
+
+---
+
+## 16. Suite de validación de aleatoriedad
+
+Tres módulos independientes que verifican si el RNG de JPS es indistinguible de aleatoriedad pura — el fundamento empírico de todo lo demás en este documento.
+
+| Módulo | Batería | Tests | Resultado (última corrida, ver `LEARNINGS.md`) |
+|---|---|---|---|
+| `jps_randomness_tests.py` | Clásica + teoría de la información | 8 (chi², Ljung-Box, runs test, FFT espectral, compresión zlib/bz2/lzma, ApEn, etc.) | Acepta H0 en todos |
+| `jps_nist_sts.py` | NIST SP 800-22 Rev 1a | 8 (frequency, block frequency, longest run, serial, approximate entropy, etc.) | Acepta H0 en todos |
+| `jps_diehard.py` | DIEHARD (Marsaglia) | 9 implementados, 6 válidos (3 marcados `_broken` y excluidos del veredicto) | Acepta H0 en los 6 válidos |
+
+**Total: 22 tests estadísticos independientes válidos. 0 rechazan H0** (uniforme + IID) sobre la última corrida documentada.
+
+```bash
+python jps_randomness_tests.py
+python jps_nist_sts.py
+python jps_diehard.py
+```
+
+**Implicancia:** no hay sesgo per-número, no hay autocorrelación temporal, no hay periodicidades, y la secuencia no es comprimible. El RNG de JPS pasa el estándar criptográfico NIST. Esto confirma — empíricamente, no solo por diseño — que ninguna estrategia de selección puede tener EV positivo. Ver `LEARNINGS.md` para el detalle hipótesis-por-hipótesis.
+
+---
+
+## 17. Autenticación y sesiones
+
+### 17.1 Multi-usuario
+
+```python
+USERS = _parse_users()   # merge de BASIC_AUTH_USER/PASS (legacy, 1 usuario)
+                          # + JPS_USERS="user1:pass1,user2:pass2" (N usuarios)
+BASIC_AUTH_ENABLED = bool(USERS)
+```
+
+Si no hay ningún usuario configurado, el server queda abierto (modo local/desarrollo). Las credenciales se comparan en tiempo constante (`secrets.compare_digest`).
+
+### 17.2 Login screen
+
+`GET /login` sirve una página HTML standalone (sin dependencias del dashboard). `POST /login` acepta form-urlencoded o JSON (`user`/`username`, `pass`/`password`), valida contra `USERS`, y si es correcto:
+
+```
+Set-Cookie: jps_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200   # 12h
+```
+
+`SESSION_TOKEN` se genera con `secrets.token_urlsafe(32)` **una vez por arranque del proceso** — reiniciar el server invalida todas las sesiones activas. `GET /logout` limpia la cookie (`Max-Age=0`).
+
+### 17.3 Reglas de acceso por tipo de ruta
+
+| Tipo de ruta | Sin auth válida |
+|---|---|
+| Páginas HTML (`/`, `/assets/*`) | 302 → `/login` |
+| Rutas de datos/API (`/api/*`, `*.json`) | 401 JSON (sin `WWW-Authenticate`, para no disparar el popup nativo del navegador) |
+| `/login`, `/logout`, `/api/status` | Siempre públicas |
+
+`_is_authed()` acepta **cookie de sesión válida** (flujo del login screen) **o** header `Authorization: Basic` válido (compat con `curl`/scripts/healthchecks que no soportan cookies).
+
+---
+
+## 18. Despliegue en Railway
+
+### 18.1 Build
+
+`Dockerfile` (imagen `python:3.12-slim`) copia todo el código + `assets/`, crea `/data` para el primer boot, y expone el puerto. `railway.json` apunta al `Dockerfile` como builder.
+
+### 18.2 Configuración de despliegue (`railway.json`)
+
+```json
+{
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+  "deploy": {
+    "startCommand": "python3 jps_server.py",
+    "healthcheckPath": "/api/status",
+    "healthcheckTimeout": 60,
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 10
+  }
+}
+```
+
+`startCommand` se simplificó a un comando sin variables de shell (ver §8.1 sobre por qué `${PORT:-7788}` no funciona aquí).
+
+### 18.3 Variables de entorno (nombres — los valores reales no se documentan en este archivo público)
+
+| Variable | Propósito |
+|---|---|
+| `PORT` | Inyectada automáticamente por Railway |
+| `JPS_DATA_DIR` | Directorio de datos persistentes — `/data` en producción |
+| `JPS_HOST` | Override del bind host (default `0.0.0.0`) |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Usuario único (legacy, compatible) |
+| `JPS_USERS` | Lista de usuarios `user:pass,user:pass` (multi-usuario) |
+| `JPS_AUTO_TTL` | TTL del caché del auto-pipeline en segundos (default 600) |
+
+### 18.4 Almacenamiento persistente
+
+Volumen montado en `/data` (independiente del filesystem de la app, que se reconstruye en cada deploy). Aquí viven `historical_data.json`, `predictions_log.jsonl`, `bandit_state.json`, `backtest_report.json`, etc. — todo lo que el sistema necesita recordar entre deploys.
+
+### 18.5 Operación
+
+- **Dominio:** servicio público vía subdominio `*.up.railway.app` (renombrable desde el dashboard de Railway o `railway domain update`).
+- **Healthcheck:** `GET /api/status`, ventana de 60s, reinicia automáticamente si falla (`restartPolicyType: ALWAYS`, hasta 10 reintentos).
+- **Despliegue:** `railway up` desde el CLI, o auto-deploy conectando el repo de GitHub desde el dashboard de Railway (no configurado por defecto).
+- **Scheduler:** corre dentro del mismo proceso del servidor (§8.5) — no requiere un cron externo.
+
+---
+
+## 19. Requerimientos técnicos
 
 ### Python
-- **Versión mínima:** Python 3.10
-- **Dependencias estándar únicamente:** `json`, `math`, `random`, `subprocess`, `argparse`, `urllib`, `http.server`, `collections`, `datetime`, `typing`
-- **Sin pip install necesario**
+- **Versión mínima:** Python 3.10 (imagen de producción: 3.12-slim)
+- **Dependencias estándar únicamente:** `json`, `math`, `random`, `secrets`, `subprocess`, `argparse`, `urllib`, `http.server`, `collections`, `datetime`, `threading`, `typing`
+- **Sin pip install necesario** — ni local ni en producción
 
-### Navegador (standalone)
-- Chart.js 4.5.0 (CDN, con SRI hash)
+### Navegador
+- Chart.js 4.5.0 (CDN, con SRI hash) — usado por `dashboard.html`
 - Cualquier navegador moderno con ES2020 support
 
 ### API JPS
@@ -540,17 +842,36 @@ roi        = neto / (base + rev)
 - Endpoint histórico: `/api/App/nuevostiempos/historical?fechaInicio=...&fechaFin=...`
 - Endpoint último: `/api/App/nuevostiempos/last`
 - Requiere headers específicos (Origin, Referer, User-Agent)
-- No está en la allowlist del sandbox de Claude → solo ejecutable localmente
+- No está en la allowlist del sandbox de Claude Code → solo ejecutable localmente o desde el server desplegado
+
+### Producción
+- Docker (imagen `python:3.12-slim`)
+- Railway (o cualquier PaaS que soporte Dockerfile + volumen persistente)
 
 ---
 
-## 14. Disclaimer (obligatorio en todo output)
+## 20. Disclaimer (obligatorio en todo output)
 
 > **"Todos los números tienen exactamente la misma probabilidad en un sistema aleatorio. No se garantiza ningún resultado."**
 
 Este disclaimer aparece en:
 - Toda salida del CLI
 - Cada tab de resultados en ambas interfaces
-- Este documento
-- El `MANIFESTO.md`
+- La pantalla de login y el dashboard
+- Este documento, el `MANIFESTO.md`, y el `EXECUTIVE_SUMMARY.md`
 - Cualquier archivo generado por el sistema
+
+Está respaldado empíricamente por §16: 22 tests estadísticos independientes confirman que el sistema es indistinguible de aleatoriedad pura. Ver `LEARNINGS.md` para el detalle de cada hipótesis testeada y descartada.
+
+---
+
+## 21. Changelog v2.0 → v3.0
+
+Lo que se agregó desde la última versión de este documento:
+
+- **Motores de validación**: backtest walk-forward (§13), predicción + reconciliación en vivo (§14), bandit Thompson Sampling adaptativo (§15), suite de 22 tests de aleatoriedad (§16) — confirman empíricamente el modelo teórico del §1.
+- **Despliegue en vivo**: Docker + Railway, volumen persistente, healthcheck, scheduler corriendo en el proceso del servidor (§18).
+- **Autenticación**: pantalla de login, sesiones por cookie, soporte multi-usuario vía `JPS_USERS` (§17).
+- **Auto-pipeline on entry**: el dashboard corre el pipeline completo al abrir, con caché de 10 min para no saturar el API JPS (§8.4).
+- **`jps_console_v2.html` como dashboard por defecto** en `/`, con auto-entry; `dashboard.html` pasa a ser el fallback (§9).
+- **Fix de robustez**: resolución de `PORT`/`HOST` independiente de expansión de shell, necesaria porque Railway invoca `startCommand` sin shell (§8.1).
