@@ -37,7 +37,7 @@ import urllib.request
 import webbrowser
 from collections import defaultdict
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 def _resolve_port():
@@ -518,6 +518,407 @@ def trigger_auto(params):
     return {"status": "running", "cached": False, "age": _auto_age()}
 
 
+# ─── MONITOR HELPERS ───────────────────────────────────────────────────────────
+# "Mission Control": lee SÓLO archivos locales (sin internet) y expone el estado
+# del pipeline, bandit, predicciones, análisis, backtest y P&L. Tolerante a
+# archivos ausentes/corruptos — el monitor nunca debe tumbar el server.
+_SERVER_START = time.time()
+
+# Orden cronológico de sesiones dentro de un mismo día (para series y sorting).
+_SESSION_ORDER = {"manana": 0, "mediatarde": 1, "tarde": 2}
+
+
+def _data_path(filename):
+    """Resuelve un archivo de datos: DATA_DIR primero, HERE como fallback.
+    El código histórico escribe unos archivos en DATA_DIR (predictions_log) y
+    otros en HERE (analysis_report, etc.); este resolver los encuentra en ambos."""
+    p = os.path.join(DATA_DIR, filename)
+    if os.path.exists(p):
+        return p
+    return os.path.join(HERE, filename)
+
+
+def _file_info(filename):
+    """Metadata básica: existe + antigüedad en minutos del mtime."""
+    p = _data_path(filename)
+    if not os.path.exists(p):
+        return {"exists": False, "age_minutes": None}
+    age_min = (time.time() - os.path.getmtime(p)) / 60
+    return {"exists": True, "age_minutes": round(age_min, 1)}
+
+
+def _load_data_json(filename, default=None):
+    """Carga un JSON de datos (DATA_DIR→HERE). Nunca lanza: devuelve default."""
+    p = _data_path(filename)
+    if not os.path.exists(p):
+        return default
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def _flatten_history(data):
+    """Normaliza CUALQUIER formato de histórico a (slots_planos, fechas).
+    Soporta: dict keyed-by-date (historical_accumulated.json), lista de
+    día-registros, lista plana de sorteos y dict con clave data/results/…"""
+    dates = set()
+    if isinstance(data, dict):
+        vals = [v for v in data.values() if isinstance(v, dict)]
+        # ¿dict keyed por fecha YYYY-MM-DD → día-registro con slots?
+        looks_dated = vals and any(
+            ("dia" in v or "manana" in v or "numero" in v) for v in vals
+        )
+        if looks_dated:
+            day_records = list(data.values())
+            dates |= {str(k)[:10] for k in data.keys()
+                      if isinstance(k, str) and k[:4].isdigit()}
+        else:
+            day_records = parse_draws(data)
+    elif isinstance(data, list):
+        day_records = data
+    else:
+        day_records = []
+    for rec in day_records:
+        if isinstance(rec, dict) and rec.get("dia"):
+            dates.add(str(rec["dia"])[:10])
+    return expand_slots([r for r in day_records if isinstance(r, dict)]), dates
+
+
+def _count_draws_and_last(data):
+    slots, dates = _flatten_history(data)
+    return len(slots), (max(dates) if dates else None)
+
+
+def _beta_ci(alpha, beta):
+    """Intervalo de confianza 95% (aprox normal) para Beta(α,β)."""
+    denom = (alpha + beta)
+    mean = alpha / denom if denom else 0.0
+    var = (alpha * beta) / (denom ** 2 * (denom + 1)) if denom else 0.0
+    std = math.sqrt(var)
+    return round(max(0.0, mean - 1.96 * std), 4), round(min(1.0, mean + 1.96 * std), 4)
+
+
+def _pipeline_health(data_age, analysis_age, has_data):
+    """green: datos <4h y análisis <8h · yellow: datos <24h · red: resto."""
+    if not has_data:
+        return "red"
+    da = 9e9 if data_age is None else data_age
+    aa = 9e9 if analysis_age is None else analysis_age
+    if da < 240 and aa < 480:
+        return "green"
+    if da < 1440:
+        return "yellow"
+    return "red"
+
+
+def _merge_predictions_by_id(filename="predictions_log.jsonl"):
+    """Lee el JSONL append-only y MERGE-a todas las líneas por id
+    (pending → committed → reconciled). Devuelve (merged_por_id, total_lineas).
+    El merge preserva `tickets`/`budget` del pending y agrega `result` del
+    reconciled — misma lógica que jps_reconcile._latest_status_by_id. Tomar sólo
+    la última línea perdería los tickets (la línea reconciled no los repite)."""
+    p = _data_path(filename)
+    merged, total_lines = {}, 0
+    if not os.path.exists(p):
+        return merged, total_lines
+    with open(p, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            total_lines += 1
+            rid = rec.get("id")
+            if not rid:
+                continue
+            if rid in merged:
+                cur = dict(merged[rid]); cur.update(rec); merged[rid] = cur
+            else:
+                merged[rid] = dict(rec)
+    return merged, total_lines
+
+
+def _pred_chrono_key(rec):
+    """Clave cronológica (draw_date, orden_sesión, predicted_at/id)."""
+    return (
+        rec.get("draw_date") or "",
+        _SESSION_ORDER.get((rec.get("session") or "").lower(), 9),
+        rec.get("predicted_at") or rec.get("id") or "",
+    )
+
+
+# ─── MONITOR ENDPOINT BUILDERS ─────────────────────────────────────────────────
+# Cada builder devuelve un dict JSON-serializable leído de archivos locales.
+def build_monitor_pipeline():
+    files = {}
+    for fname, key in (("historical_accumulated.json", "historical_accumulated"),
+                       ("historical_data.json",        "historical_data")):
+        data = _load_data_json(fname)
+        n_draws, last = _count_draws_and_last(data) if data is not None else (0, None)
+        fi = _file_info(fname)
+        fi.update(n_draws=n_draws, last_draw_date=last)
+        files[key] = fi
+
+    ar = _load_data_json("analysis_report.json") or {}
+    fi = _file_info("analysis_report.json")
+    fi.update(generated_at=ar.get("generated_at"), n_draws=ar.get("n_draws"),
+              n_valid=ar.get("n_valid"))
+    files["analysis_report"] = fi
+
+    bs = _load_data_json("bandit_state.json") or {}
+    strategies = bs.get("strategies", bs.get("arms", {})) or {}
+    strat_vals = list(strategies.values()) if isinstance(strategies, dict) else []
+    fi = _file_info("bandit_state.json")
+    fi.update(n_strategies=len(strategies),
+              total_picks=sum((s.get("n_picks", 0) or 0) for s in strat_vals),
+              total_observations=sum((s.get("n_observations", 0) or 0) for s in strat_vals))
+    files["bandit_state"] = fi
+
+    merged, total_lines = _merge_predictions_by_id()
+    statuses = [r.get("status") for r in merged.values()]
+    fi = _file_info("predictions_log.jsonl")
+    fi.update(total_lines=total_lines, n_ids=len(merged),
+              pending=statuses.count("pending"), committed=statuses.count("committed"),
+              reconciled=statuses.count("reconciled"), skipped=statuses.count("skipped"))
+    files["predictions_log"] = fi
+
+    lr = _load_data_json("last_result.json") or {}
+    lr_session = lr_exacto = lr_mega = lr_rev = None
+    for sess in ("tarde", "mediaTarde", "manana"):
+        slot = lr.get(sess)
+        if isinstance(slot, dict) and slot.get("numero") is not None:
+            lr_session = sess
+            lr_exacto = str(slot.get("numero")).zfill(2)
+            lr_mega = slot.get("meganNumero")
+            lr_rev = int(slot.get("in_reventado", 0) or 0) == 1
+            break
+    fi = _file_info("last_result.json")
+    fi.update(date=(str(lr.get("dia"))[:10] if lr.get("dia") else None),
+              session=lr_session, exacto=lr_exacto, mega=lr_mega, reventada=lr_rev)
+    files["last_result"] = fi
+
+    bt = _load_data_json("backtest_report.json") or {}
+    fi = _file_info("backtest_report.json")
+    fi.update(n_strategies=len(bt.get("strategies", {}) or {}))
+    files["backtest_report"] = fi
+    files["output"] = _file_info("output.json")
+    files["audit_result"] = _file_info("audit_result.json")
+
+    data_ages = [files[k]["age_minutes"] for k in ("historical_accumulated", "historical_data")
+                 if files[k]["exists"] and files[k]["age_minutes"] is not None]
+    data_age = min(data_ages) if data_ages else None
+    analysis_age = files["analysis_report"]["age_minutes"] if files["analysis_report"]["exists"] else None
+    started = STATE.get("auto_started_at")
+    return {
+        "files": files,
+        "data_age_minutes": data_age,
+        "analysis_age_minutes": analysis_age,
+        "pipeline_health": _pipeline_health(data_age, analysis_age, bool(data_ages)),
+        "server_uptime_minutes": round((time.time() - _SERVER_START) / 60, 1),
+        "auto_status": STATE.get("auto_status"),
+        "auto_started_at": (datetime.fromtimestamp(started).isoformat() if started else None),
+        "auto_age_minutes": (round((time.time() - started) / 60, 1) if started else None),
+        "now": datetime.now().isoformat(),
+    }
+
+
+def build_monitor_bandit():
+    bs = _load_data_json("bandit_state.json") or {}
+    raw = bs.get("strategies", bs.get("arms", {})) or {}
+    arms = []
+    for name, s in (raw.items() if isinstance(raw, dict) else []):
+        alpha = float(s.get("alpha", 1) or 1)
+        beta = float(s.get("beta", 1) or 1)
+        denom = alpha + beta
+        mean = alpha / denom
+        std = math.sqrt((alpha * beta) / (denom ** 2 * (denom + 1)))
+        ci_low, ci_high = _beta_ci(alpha, beta)
+        arms.append({
+            "strategy": name, "alpha": alpha, "beta": beta,
+            "posterior_mean": round(mean, 4), "posterior_std": round(std, 4),
+            "ci_low": ci_low, "ci_high": ci_high,
+            "n_trials": int(round(alpha + beta - 2)), "n_hits": int(round(alpha - 1)),
+            "n_picks": s.get("n_picks", 0) or 0,
+            "n_observations": s.get("n_observations", 0) or 0,
+            "last_hit_dia": s.get("last_hit_dia"), "last_miss_dia": s.get("last_miss_dia"),
+        })
+    arms.sort(key=lambda a: (a["posterior_mean"], a["n_observations"], a["n_hits"]), reverse=True)
+    has_data = any(a["n_observations"] for a in arms)
+    return {
+        "total_strategies": len(arms),
+        "total_picks": sum(a["n_picks"] for a in arms),
+        "total_observations": sum(a["n_observations"] for a in arms),
+        "created_at": bs.get("created_at"), "updated_at": bs.get("updated_at"),
+        "has_data": has_data, "arms": arms,
+        "top_strategy": (arms[0]["strategy"] if arms and has_data else None),
+    }
+
+
+def build_monitor_predictions():
+    merged, total_lines = _merge_predictions_by_id()
+    recs = sorted(merged.values(), key=_pred_chrono_key, reverse=True)
+    reconciled = [r for r in recs if r.get("status") == "reconciled"]
+    n_hits = sum(1 for r in reconciled if (r.get("result") or {}).get("any_hit"))
+    statuses = [r.get("status") for r in recs]
+
+    recent = []
+    for r in recs[:20]:
+        res = r.get("result") or None
+        recent.append({
+            "id": r.get("id"), "draw_date": r.get("draw_date"), "session": r.get("session"),
+            "strategy": r.get("strategy"), "profile": r.get("profile"),
+            "budget": r.get("budget"),
+            "n_tickets": r.get("n_tickets") or (len(r.get("tickets", [])) or None),
+            "tickets": r.get("tickets", []), "status": r.get("status"),
+            "predicted_at": r.get("predicted_at"), "reconciled_at": r.get("reconciled_at"),
+            "result": ({
+                "exacto": res.get("drawn_exacto"),
+                "reventada": res.get("drawn_reventada") == "SI",
+                "mega": res.get("drawn_mega"), "hit": res.get("any_hit"),
+                "cost": res.get("total_cost"), "recuperado": res.get("total_recuperado"),
+                "net": res.get("total_neto"), "roi": res.get("roi"),
+            } if res else None),
+        })
+
+    by_strategy = {}
+    for r in reconciled:
+        s = r.get("strategy") or "?"
+        res = r.get("result") or {}
+        d = by_strategy.setdefault(s, {"n": 0, "hits": 0, "net_total": 0, "cost_total": 0})
+        d["n"] += 1
+        d["net_total"] += res.get("total_neto", 0) or 0
+        d["cost_total"] += res.get("total_cost", 0) or 0
+        if res.get("any_hit"):
+            d["hits"] += 1
+    for d in by_strategy.values():
+        d["hit_rate"] = round(d["hits"] / d["n"] * 100, 2) if d["n"] else 0
+        d["roi"] = round(d["net_total"] / d["cost_total"] * 100, 2) if d["cost_total"] else 0
+
+    return {
+        "total": len(recs), "total_lines": total_lines,
+        "pending": statuses.count("pending"), "committed": statuses.count("committed"),
+        "skipped": statuses.count("skipped"), "reconciled": len(reconciled),
+        "n_hits": n_hits,
+        "hit_rate_pct": round(n_hits / len(reconciled) * 100, 2) if reconciled else 0,
+        "recent": recent, "by_strategy": by_strategy,
+    }
+
+
+def build_monitor_analysis():
+    ar = _load_data_json("analysis_report.json")
+    if not ar:
+        return {"exists": False}
+    n_valid = ar.get("n_valid") or 0
+    rev_pct = ar.get("rev_rate_pct", 0) or 0
+    p0 = 1.0 / 3.0
+    rev_z = 0.0
+    if n_valid > 0:
+        se = math.sqrt(p0 * (1 - p0) / n_valid)
+        rev_z = round((rev_pct / 100.0 - p0) / se, 2) if se else 0.0
+    anomalies = ar.get("anomalies", {}) or {}
+    outliers = anomalies.get("outliers", []) or []
+    top25 = ar.get("top25", []) or []
+    sig = [o for o in outliers if abs(o.get("z", 0) or 0) >= 2.576]
+    return {
+        "exists": True,
+        "generated_at": ar.get("generated_at"),
+        "n_draws": ar.get("n_draws"), "n_valid": n_valid,
+        "rev_rate_pct": round(rev_pct, 2), "rev_expected_pct": 33.33,
+        "rev_si": ar.get("rev_si"), "rev_z": rev_z, "rev_anomaly": abs(rev_z) > 2.576,
+        "chi2": anomalies.get("chi2"), "chi2_df": anomalies.get("chi2_df", 99),
+        "n_sig_individual": anomalies.get("n_sig_individual", len(sig)),
+        "top15": [{"num": t.get("num_str"), "freq": t.get("total"),
+                   "weight": t.get("weight"), "si_pct": t.get("si_pct"),
+                   "rev_z": t.get("rev_z")} for t in top25[:15]],
+        "anomalies": [{"num": o.get("num_str"), "freq": o.get("total"),
+                       "z": o.get("z"), "direction": o.get("direction")} for o in sig[:15]],
+        "outliers": [{"num": o.get("num_str"), "freq": o.get("total"),
+                      "z": o.get("z"), "direction": o.get("direction")} for o in outliers[:12]],
+        "decade_bias": (anomalies.get("decade_bias", []) or [])[:10],
+        "rev_outliers": (anomalies.get("rev_outliers", []) or [])[:8],
+    }
+
+
+def build_monitor_backtest():
+    bt = _load_data_json("backtest_report.json")
+    if not bt:
+        return {"exists": False}
+    cfg = bt.get("config", {}) or {}
+    strategies = []
+    for name, s in (bt.get("strategies", {}) or {}).items():
+        strategies.append({
+            "name": name, "profile": s.get("profile"),
+            "n_sessions": s.get("n_sessions"), "play_rate": s.get("play_rate"),
+            "n_hits": s.get("n_hits"),
+            "hit_rate_pct": round((s.get("hit_rate", 0) or 0) * 100, 2),
+            "roi_total_pct": round((s.get("roi_total", 0) or 0) * 100, 2),
+            "mean_per_session": s.get("mean_net_per_session"), "std": s.get("std_net"),
+            "median": s.get("median_net"), "p95": s.get("p95_net"),
+            "max_drawdown": s.get("max_drawdown_cumulative"),
+            "z_vs_baseline": s.get("z_vs_baseline"),
+            "p_value": s.get("p_value_vs_baseline_permtest"),
+            "is_baseline": name == "random_uniform",
+        })
+    strategies.sort(key=lambda x: (x["roi_total_pct"] is not None, x["roi_total_pct"] or -9e9),
+                    reverse=True)
+    baseline = next((s for s in strategies if s["is_baseline"]), None)
+    return {
+        "exists": True,
+        "config": {"budget": cfg.get("budget"), "n_tickets": cfg.get("n_tickets"),
+                   "n_train": cfg.get("n_train"), "n_test": cfg.get("n_test"),
+                   "n_total_draws": cfg.get("n_total_draws"),
+                   "generated_at": bt.get("generated_at")},
+        "strategies": strategies,
+        "baseline_roi": (baseline["roi_total_pct"] if baseline else None),
+        "best_strategy": (strategies[0]["name"] if strategies else None),
+        "ev_teorico": bt.get("expected_ev_per_session_balanced"),
+        "disclaimer": bt.get("disclaimer"),
+    }
+
+
+def build_monitor_pnl():
+    merged, _ = _merge_predictions_by_id()
+    reconciled = sorted(
+        [r for r in merged.values() if r.get("status") == "reconciled" and r.get("result")],
+        key=_pred_chrono_key,
+    )
+    total_bet = total_payout = net = n_hits = cum = 0
+    series, by_strategy = [], {}
+    for r in reconciled:
+        res = r.get("result") or {}
+        cost = res.get("total_cost", 0) or 0
+        payout = res.get("total_recuperado", 0) or 0
+        net_s = res.get("total_neto", 0) or 0
+        total_bet += cost; total_payout += payout; net += net_s; cum += net_s
+        if res.get("any_hit"):
+            n_hits += 1
+        series.append({
+            "date": r.get("draw_date"), "session": r.get("session"),
+            "strategy": r.get("strategy"), "bet": cost, "payout": payout,
+            "net_session": net_s, "hit": bool(res.get("any_hit")), "cumulative_net": cum,
+        })
+        s = r.get("strategy") or "?"
+        d = by_strategy.setdefault(s, {"n": 0, "bet": 0, "net": 0, "hits": 0})
+        d["n"] += 1; d["bet"] += cost; d["net"] += net_s
+        if res.get("any_hit"):
+            d["hits"] += 1
+    for d in by_strategy.values():
+        d["roi"] = round(d["net"] / d["bet"] * 100, 2) if d["bet"] else 0
+    n = len(reconciled)
+    return {
+        "total_bet": total_bet, "total_payout": total_payout, "net": net,
+        "roi_pct": round(net / total_bet * 100, 2) if total_bet else 0,
+        "n_sessions": n, "n_hits": n_hits,
+        "hit_rate_pct": round(n_hits / n * 100, 2) if n else 0,
+        "series": series, "by_strategy": by_strategy,
+    }
+
+
 # ─── HTTP SERVER ───────────────────────────────────────────────────────────────
 CORS = {
     "Access-Control-Allow-Origin":  "*",
@@ -817,7 +1218,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path != "/api/status":
             # Páginas del navegador → redirige al login; API/datos → 401 JSON.
-            is_page = path == "/" or path.startswith("/assets/")
+            is_page = path in ("/", "/monitor") or path.startswith("/assets/")
             if not self._require_auth(html=is_page):
                 return
         try:
@@ -908,6 +1309,22 @@ class Handler(BaseHTTPRequestHandler):
                     "fresh":  _auto_is_fresh(),
                     "age":    _auto_age(),
                 })
+
+            # ─── MONITOR (Mission Control) ───────────────────────────────────
+            elif parsed.path == "/monitor":
+                self.send_html(MONITOR_HTML)
+            elif parsed.path == "/api/monitor/pipeline":
+                self.send_json(build_monitor_pipeline())
+            elif parsed.path == "/api/monitor/bandit":
+                self.send_json(build_monitor_bandit())
+            elif parsed.path == "/api/monitor/predictions":
+                self.send_json(build_monitor_predictions())
+            elif parsed.path == "/api/monitor/analysis":
+                self.send_json(build_monitor_analysis())
+            elif parsed.path == "/api/monitor/backtest":
+                self.send_json(build_monitor_backtest())
+            elif parsed.path == "/api/monitor/pnl":
+                self.send_json(build_monitor_pnl())
 
             else:
                 self.send_json({"error": "Not found"}, 404)
@@ -1817,6 +2234,430 @@ function renderArchitect(top25,anom,output,budget,profile){
 """
 
 
+# ─── MONITOR DASHBOARD HTML (Mission Control) ──────────────────────────────────
+MONITOR_HTML = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JPS · Mission Control</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+:root{
+  --green:#0F6E56;--green-d:#0a5443;--bg:#0d1117;--card:#161b22;--card2:#1c2230;
+  --bd:#283041;--txt:#e6edf3;--mut:#8b949e;--mut2:#6e7681;
+  --pos:#2ea043;--posb:#3fb950;--warn:#d29922;--neg:#f85149;--blue:#2f81f7;--pur:#a371f7;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(1400px 700px at 50% -15%,#11251c,#0d1117 60%);
+  color:var(--txt);min-height:100vh;font-size:14px;line-height:1.45}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1480px;margin:0 auto;padding:18px 22px 60px}
+
+/* Header */
+header{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:16px;
+  flex-wrap:wrap;padding:14px 22px;margin:-18px -22px 22px;
+  background:rgba(13,17,23,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--bd)}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
+.brand .dot{width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 16px var(--green);animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.brand h1{font-size:16px;font-weight:800;letter-spacing:.3px}
+.brand .sub{font-size:11px;color:var(--mut)}
+.hpill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  font-size:12px;font-weight:700;border:1px solid var(--bd);background:var(--card)}
+.hpill .d{width:9px;height:9px;border-radius:50%}
+.hdr-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
+.hdr-meta b{color:var(--txt)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;
+  border:1px solid var(--bd);background:var(--card);color:var(--txt);font-size:12.5px;
+  font-weight:600;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--green);background:var(--card2)}
+.btn.gh{background:linear-gradient(180deg,var(--green),var(--green-d));border-color:transparent}
+.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
+
+/* Grid + cards */
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(6,1fr);margin-bottom:18px}
+@media(max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 17px;position:relative;overflow:hidden}
+.kpi .lab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mut);margin-bottom:7px}
+.kpi .val{font-size:24px;font-weight:800;letter-spacing:.2px;line-height:1.1}
+.kpi .hint{font-size:11px;color:var(--mut);margin-top:5px}
+.kpi .edge{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--green)}
+
+section{margin-bottom:20px}
+.sec-h{display:flex;align-items:center;gap:10px;margin:0 2px 11px}
+.sec-h h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.8px}
+.sec-h .tag{font-size:11px;color:var(--mut);font-weight:600}
+.sec-h .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--bd),transparent)}
+
+.cols2{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+.cols2b{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:980px){.cols2,.cols2b{grid-template-columns:1fr}}
+
+/* File status grid */
+.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:11px}
+.file{background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:12px 13px}
+.file .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.file .nm{font-size:12.5px;font-weight:700}
+.file .meta{font-size:11px;color:var(--mut);line-height:1.5}
+.file .meta b{color:var(--txt);font-weight:600}
+.fdot{width:9px;height:9px;border-radius:50%;flex:none}
+.miss{opacity:.5}
+
+/* Tables */
+.tbl-wrap{overflow:auto;border-radius:11px;border:1px solid var(--bd)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:8px 11px;text-align:left;white-space:nowrap}
+thead th{background:var(--card2);color:var(--mut);font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.5px;font-weight:700;position:sticky;top:0;cursor:pointer;user-select:none}
+tbody tr{border-top:1px solid var(--bd)}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.3px}
+.b-pend{background:rgba(210,153,34,.16);color:#e3b341;border:1px solid rgba(210,153,34,.35)}
+.b-rec{background:rgba(46,160,67,.16);color:var(--posb);border:1px solid rgba(46,160,67,.35)}
+.b-com{background:rgba(47,129,247,.16);color:#6cb0ff;border:1px solid rgba(47,129,247,.35)}
+.b-skip{background:rgba(139,148,158,.16);color:var(--mut);border:1px solid var(--bd)}
+.b-hit{background:rgba(46,160,67,.22);color:var(--posb)}
+.b-miss{background:rgba(248,81,73,.16);color:#ff7b72}
+.pos{color:var(--posb)}.neg{color:#ff7b72}.warnc{color:var(--warn)}.muted{color:var(--mut)}
+.win-row{box-shadow:inset 3px 0 0 var(--posb)}
+.best-row{background:rgba(46,160,67,.07)}
+.base-row td{color:var(--mut);font-style:italic}
+.chip{font-size:10px;padding:1px 6px;border-radius:6px;background:var(--card2);border:1px solid var(--bd);color:var(--mut)}
+.mono{font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace}
+
+/* Gauge */
+.gauge{margin-top:4px}
+.gbar{position:relative;height:26px;border-radius:8px;background:var(--card2);border:1px solid var(--bd);overflow:hidden}
+.gfill{position:absolute;left:0;top:0;bottom:0;border-radius:8px 0 0 8px;transition:width .5s}
+.gmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--txt)}
+.gmark::after{content:'33.3%';position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--mut);white-space:nowrap}
+.glabels{display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-top:4px}
+
+.chart-box{position:relative;height:280px}
+.chart-box.sm{height:230px}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;min-height:120px;
+  color:var(--mut);font-size:12.5px;text-align:center;padding:20px}
+.disc{margin-top:24px;padding:13px 16px;border:1px solid var(--bd);border-radius:11px;
+  background:var(--card);font-size:11.5px;color:var(--mut);line-height:1.6}
+.disc b{color:var(--warn)}
+.toast{position:fixed;bottom:18px;right:18px;z-index:99;padding:11px 15px;border-radius:10px;
+  background:var(--card);border:1px solid var(--neg);color:#ff9a9a;font-size:12.5px;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.statline{font-size:11px;color:var(--mut2);margin-top:3px}
+.gridstat{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:640px){.gridstat{grid-template-columns:repeat(2,1fr)}}
+.mini{background:var(--card2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.mini .l{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+.mini .v{font-size:18px;font-weight:800;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>JPS TIEMPOS · MISSION CONTROL</h1>
+        <div class="sub">Observabilidad del Architect system · datos locales</div>
+      </div>
+    </div>
+    <span id="health" class="hpill"><span class="d" style="background:var(--mut)"></span><span id="healthtx">—</span></span>
+    <div class="hdr-meta">
+      <span>Datos: <b id="dataage">—</b></span>
+      <span>Uptime: <b id="uptime">—</b></span>
+      <span id="clock" class="mono">--:--:--</span>
+    </div>
+    <button class="btn" id="refresh"><span id="ricon">↻</span> <span id="rtext">Refrescar</span></button>
+    <a class="btn" href="/" title="Dashboard principal">← Dashboard</a>
+    <a class="btn" href="/logout" title="Cerrar sesión">Salir</a>
+  </header>
+
+  <!-- KPI strip -->
+  <div class="grid kpis" id="kpis"></div>
+
+  <!-- Pipeline status -->
+  <section>
+    <div class="sec-h"><h2>Pipeline</h2><span class="ln"></span><span class="tag" id="pipe-tag"></span></div>
+    <div class="files" id="files"></div>
+  </section>
+
+  <!-- Predictions + P&L -->
+  <section class="cols2">
+    <div>
+      <div class="sec-h"><h2>Predicciones</h2><span class="ln"></span><span class="tag" id="pred-tag"></span></div>
+      <div class="tbl-wrap" style="max-height:380px"><table id="pred-tbl">
+        <thead><tr><th>Fecha</th><th>Sesión</th><th>Estrategia</th><th>Estado</th><th>Exacto</th><th class="num">Neto</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div>
+      <div class="sec-h"><h2>P&amp;L acumulado</h2><span class="ln"></span><span class="tag" id="pnl-tag"></span></div>
+      <div class="card"><div class="chart-box" id="pnlbox"><canvas id="pnlChart"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- Bandit + Frequency -->
+  <section class="cols2b">
+    <div>
+      <div class="sec-h"><h2>Bandit · Thompson</h2><span class="ln"></span><span class="tag" id="bandit-tag"></span></div>
+      <div class="card">
+        <div class="chart-box sm" id="banditbox"><canvas id="banditChart"></canvas></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-h"><h2>Análisis de frecuencias</h2><span class="ln"></span><span class="tag" id="an-tag"></span></div>
+      <div class="card">
+        <div id="rev-gauge"></div>
+        <div class="chart-box sm" id="freqbox" style="margin-top:14px"><canvas id="freqChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Backtest leaderboard -->
+  <section>
+    <div class="sec-h"><h2>Backtest · Leaderboard</h2><span class="ln"></span><span class="tag" id="bt-tag"></span></div>
+    <div class="gridstat" id="bt-stats"></div>
+    <div class="tbl-wrap"><table id="bt-tbl">
+      <thead><tr>
+        <th>#</th><th>Estrategia</th><th>Perfil</th><th class="num">Hit %</th><th class="num">ROI</th>
+        <th class="num">Media/ses</th><th class="num">Mediana</th><th class="num">P95</th>
+        <th class="num">Max DD</th><th class="num">z vs base</th><th class="num">p-val</th>
+      </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- Strategy P&L -->
+  <section>
+    <div class="sec-h"><h2>P&amp;L por estrategia (real)</h2><span class="ln"></span><span class="tag" id="sp-tag"></span></div>
+    <div class="card"><div class="chart-box" id="spbox"><canvas id="spChart"></canvas></div></div>
+  </section>
+
+  <div class="disc">
+    <b>Disclaimer:</b> Todos los números tienen exactamente la misma probabilidad en un sistema aleatorio.
+    No se garantiza ningún resultado. Las diferencias entre estrategias sobre muestras pequeñas están
+    dominadas por ruido; el backtest valida calibración, no predice el futuro.
+    <span id="lastupd" class="statline"></span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API={pipeline:'/api/monitor/pipeline',bandit:'/api/monitor/bandit',predictions:'/api/monitor/predictions',analysis:'/api/monitor/analysis',backtest:'/api/monitor/backtest',pnl:'/api/monitor/pnl'};
+const REFRESH_MS=30000;
+let charts={};let countdown=REFRESH_MS/1000;let busy=false;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+const $=s=>document.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+function fmtC(n){if(n==null||isNaN(n))return '—';const s=n<0?'-':(n>0?'+':'');return s+'₡'+Math.abs(Math.round(n)).toLocaleString('en-US');}
+function fmtCp(n){if(n==null||isNaN(n))return '—';return '₡'+Math.round(n).toLocaleString('en-US');}
+function pct(n,d=1){if(n==null||isNaN(n))return '—';return (n>0?'+':'')+Number(n).toFixed(d)+'%';}
+function pctp(n,d=1){if(n==null||isNaN(n))return '—';return Number(n).toFixed(d)+'%';}
+function ageStr(m){if(m==null)return 'n/d';if(m<1)return 'ahora';if(m<60)return Math.round(m)+'m';if(m<1440)return (m/60).toFixed(1)+'h';return (m/1440).toFixed(1)+'d';}
+function signClass(n){return n>0?'pos':(n<0?'neg':'muted');}
+const HCOL={green:'var(--pos)',yellow:'var(--warn)',red:'var(--neg)'};
+function freshColor(m){if(m==null)return 'var(--mut2)';if(m<240)return 'var(--pos)';if(m<1440)return 'var(--warn)';return 'var(--neg)';}
+async function fJSON(u){const r=await fetch(u,{headers:{Accept:'application/json'},cache:'no-store'});if(!r.ok)throw new Error(u.split('/').pop()+' HTTP '+r.status);return r.json();}
+function toast(msg){const t=$('#toast');t.textContent='⚠ '+msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),4200);}
+function destroy(k){if(charts[k]){charts[k].destroy();delete charts[k];}}
+const HAS_CHART=typeof Chart!=='undefined';
+if(HAS_CHART){Chart.defaults.color='#8b949e';Chart.defaults.borderColor='rgba(255,255,255,.06)';Chart.defaults.font.family="-apple-system,Segoe UI,sans-serif";Chart.defaults.font.size=11;Chart.defaults.animation.duration=500;}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+function renderKPIs(pipe,preds,pnl,bt,an){
+  const k=$('#kpis');k.innerHTML='';
+  const health=pipe?pipe.pipeline_health:null;
+  const cards=[];
+  cards.push({lab:'Pipeline',val:health?health.toUpperCase():'—',hint:pipe?('uptime '+ageStr(pipe.server_uptime_minutes)):'',col:health?HCOL[health]:'var(--mut)'});
+  cards.push({lab:'Frescura datos',val:pipe?ageStr(pipe.data_age_minutes):'—',hint:pipe&&pipe.files.historical_accumulated.last_draw_date?('último '+pipe.files.historical_accumulated.last_draw_date):'',col:freshColor(pipe?pipe.data_age_minutes:null)});
+  if(preds){const r=preds.reconciled,p=preds.pending+preds.committed;
+    cards.push({lab:'Predicciones',val:preds.total,hint:p+' pend · '+r+' recon',col:'var(--blue)'});}
+  else cards.push({lab:'Predicciones',val:'—',hint:'',col:'var(--mut)'});
+  if(pnl){cards.push({lab:'P&L acumulado',val:fmtC(pnl.net),hint:pnl.n_sessions?(pct(pnl.roi_pct)+' ROI · '+pnl.n_sessions+' ses'):'sin sesiones',col:pnl.net>0?'var(--pos)':(pnl.net<0?'var(--neg)':'var(--mut)')});}
+  else cards.push({lab:'P&L acumulado',val:'—',hint:'',col:'var(--mut)'});
+  if(preds){cards.push({lab:'Hit rate (real)',val:preds.reconciled?pctp(preds.hit_rate_pct):'—',hint:preds.n_hits+' de '+preds.reconciled+' aciertos',col:'var(--pur)'});}
+  else cards.push({lab:'Hit rate',val:'—',hint:'',col:'var(--mut)'});
+  if(bt&&bt.exists){const best=bt.strategies[0];cards.push({lab:'Backtest líder',val:best?pct(best.roi_total_pct):'—',hint:best?best.name:'',col:best&&best.roi_total_pct>0?'var(--pos)':'var(--warn)'});}
+  else cards.push({lab:'Backtest',val:'—',hint:'',col:'var(--mut)'});
+  cards.forEach(c=>{const d=el('div','card kpi');d.innerHTML=`<div class="edge" style="background:${c.col}"></div><div class="lab">${c.lab}</div><div class="val" style="color:${c.col}">${c.val}</div><div class="hint">${c.hint||''}</div>`;k.appendChild(d);});
+}
+
+// ── Pipeline files ────────────────────────────────────────────────────────────
+const FILE_LABELS={historical_accumulated:'Histórico acumulado',historical_data:'Histórico (fetch)',analysis_report:'Análisis estadístico',bandit_state:'Bandit state',predictions_log:'Predictions log',last_result:'Último sorteo',backtest_report:'Backtest report',output:'Monte Carlo output',audit_result:'Auditoría'};
+function fileMeta(key,f){
+  if(!f.exists)return '<span class="muted">no existe</span>';
+  const a=`hace <b>${ageStr(f.age_minutes)}</b>`;let extra='';
+  if(key==='historical_accumulated'||key==='historical_data')extra=`<b>${f.n_draws||0}</b> sorteos${f.last_draw_date?' · '+f.last_draw_date:''}`;
+  else if(key==='analysis_report')extra=`<b>${f.n_valid||0}</b> válidos`;
+  else if(key==='bandit_state')extra=`<b>${f.n_strategies||0}</b> estrategias · ${f.total_observations||0} obs`;
+  else if(key==='predictions_log')extra=`<b>${f.n_ids||0}</b> preds · ${f.pending||0}P/${f.reconciled||0}R`;
+  else if(key==='last_result')extra=f.exacto?`exacto <b>${f.exacto}</b>${f.reventada?' · REV':''} (${f.session||''})`:`${f.date||''}`;
+  else if(key==='backtest_report')extra=`<b>${f.n_strategies||0}</b> estrategias`;
+  return a+(extra?'<br>'+extra:'');
+}
+function renderPipeline(pipe){
+  const box=$('#files');box.innerHTML='';
+  if(!pipe){box.innerHTML='<div class="empty">No se pudo leer el pipeline</div>';return;}
+  $('#pipe-tag').textContent='salud: '+pipe.pipeline_health+' · auto: '+(pipe.auto_status||'—');
+  const order=['historical_accumulated','historical_data','analysis_report','last_result','predictions_log','bandit_state','backtest_report','output','audit_result'];
+  order.forEach(key=>{const f=pipe.files[key];if(!f)return;
+    const d=el('div','file'+(f.exists?'':' miss'));
+    d.innerHTML=`<div class="top"><span class="fdot" style="background:${f.exists?freshColor(f.age_minutes):'var(--mut2)'}"></span><span class="nm">${FILE_LABELS[key]||key}</span></div><div class="meta">${fileMeta(key,f)}</div>`;
+    box.appendChild(d);});
+}
+
+// ── Predictions table ─────────────────────────────────────────────────────────
+const BADGE={pending:'b-pend',reconciled:'b-rec',committed:'b-com',skipped:'b-skip'};
+function renderPredictions(p){
+  const tb=$('#pred-tbl').querySelector('tbody');tb.innerHTML='';
+  if(!p){tb.innerHTML='<tr><td colspan="6" class="empty">sin datos</td></tr>';return;}
+  $('#pred-tag').textContent=`${p.total} preds · ${p.reconciled} reconciliadas · hit ${pctp(p.hit_rate_pct)}`;
+  if(!p.recent.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">No hay predicciones registradas todavía</div></td></tr>';return;}
+  p.recent.forEach(r=>{
+    const res=r.result;const win=res&&res.hit;
+    const tr=el('tr',win?'win-row':'');
+    const exa=res?`<span class="badge ${win?'b-hit':'b-miss'}">${res.exacto}${res.reventada?' R':''}</span>`:'<span class="muted">—</span>';
+    const net=res?`<span class="${signClass(res.net)}">${fmtC(res.net)}</span>`:'<span class="chip">pend</span>';
+    tr.innerHTML=`<td class="mono">${r.draw_date||'—'}</td><td>${r.session||'—'}</td><td>${r.strategy||'—'}</td><td><span class="badge ${BADGE[r.status]||'b-skip'}">${r.status||'—'}</span></td><td>${exa}</td><td class="num">${net}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ── P&L chart ─────────────────────────────────────────────────────────────────
+function renderPnl(pnl){
+  $('#pnl-tag').textContent=pnl?(fmtC(pnl.net)+' · '+pct(pnl.roi_pct)+' ROI'):'';
+  destroy('pnl');const box=$('#pnlbox');
+  if(!pnl||!pnl.series||!pnl.series.length){box.innerHTML='<div class="empty">Sin sesiones reconciliadas todavía.<br>El P&amp;L aparece cuando hay resultados cruzados.</div>';return;}
+  box.innerHTML='<canvas id="pnlChart"></canvas>';if(!HAS_CHART){box.innerHTML='<div class="empty">Chart.js no disponible (offline)</div>';return;}
+  const labels=pnl.series.map((s,i)=>(s.date||('#'+(i+1)))+(s.session?(' '+s.session[0].toUpperCase()):''));
+  const data=pnl.series.map(s=>s.cumulative_net);
+  const up=pnl.net>=0;
+  charts.pnl=new Chart($('#pnlChart'),{type:'line',data:{labels,datasets:[{data,borderColor:up?'#3fb950':'#f85149',backgroundColor:up?'rgba(63,185,80,.12)':'rgba(248,81,73,.12)',fill:true,tension:.25,pointRadius:2,pointHoverRadius:5,borderWidth:2}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Acum: '+fmtC(c.parsed.y),afterLabel:c=>{const s=pnl.series[c.dataIndex];return [s.strategy||'',(s.hit?'★ HIT ':'')+'sesión '+fmtC(s.net_session)];}}}},
+    scales:{y:{ticks:{callback:v=>fmtCp(v)},grid:{color:'rgba(255,255,255,.05)'}},x:{ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}}}});
+}
+
+// ── Bandit chart ──────────────────────────────────────────────────────────────
+function renderBandit(b){
+  destroy('bandit');const box=$('#banditbox');
+  if(!b){box.innerHTML='<div class="empty">sin datos de bandit</div>';return;}
+  $('#bandit-tag').textContent=`${b.total_strategies} brazos · ${b.total_observations} obs`;
+  if(!b.has_data){box.innerHTML=`<div class="empty">Bandit inicializado (${b.total_strategies} estrategias) — sin outcomes todavía.<br>Posteriores en 0.50 hasta reconciliar predicciones.</div>`;return;}
+  box.innerHTML='<canvas id="banditChart"></canvas>';if(!HAS_CHART){box.innerHTML='<div class="empty">Chart.js offline</div>';return;}
+  const arms=b.arms.slice(0,12);
+  charts.bandit=new Chart($('#banditChart'),{type:'bar',data:{labels:arms.map(a=>a.strategy),datasets:[{label:'Posterior',data:arms.map(a=>+(a.posterior_mean*100).toFixed(1)),backgroundColor:arms.map((a,i)=>i===0?'#3fb950':'rgba(47,129,247,.6)'),borderRadius:5}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'media '+c.parsed.x+'%',afterLabel:c=>{const a=arms[c.dataIndex];return `obs ${a.n_observations} · hits ${a.n_hits} · CI[${(a.ci_low*100).toFixed(0)}-${(a.ci_high*100).toFixed(0)}]`;}}}},
+    scales:{x:{min:0,suggestedMax:Math.max(60,...arms.map(a=>a.posterior_mean*100+5)),ticks:{callback:v=>v+'%'}},y:{ticks:{font:{size:10}}}}}});
+}
+
+// ── Frequency: rev gauge + top15 bar ──────────────────────────────────────────
+function renderAnalysis(an){
+  const g=$('#rev-gauge');
+  destroy('freq');const box=$('#freqbox');
+  if(!an||!an.exists){g.innerHTML='';box.innerHTML='<div class="empty">Sin análisis. Corré el pipeline.</div>';$('#an-tag').textContent='';return;}
+  $('#an-tag').textContent=`${an.n_valid} sorteos · χ²=${an.chi2!=null?an.chi2:'?'}`;
+  const obs=an.rev_rate_pct,exp=33.33;const w=Math.min(100,obs);const zc=Math.abs(an.rev_z)>2.576?'neg':(Math.abs(an.rev_z)>1.96?'warnc':'pos');
+  g.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Reventada</span><span><b style="font-size:16px">${pctp(obs)}</b> <span class="${zc}">z=${an.rev_z}</span></span></div>
+    <div class="gauge"><div class="gbar"><div class="gfill" style="width:${w}%;background:${an.rev_anomaly?'var(--neg)':'linear-gradient(90deg,var(--green),#3fb950)'}"></div><div class="gmark" style="left:${exp}%"></div></div>
+    <div class="glabels"><span>0%</span><span>esperado 33.3%</span><span>100%</span></div></div>
+    ${an.rev_anomaly?'<div class="statline neg">⚠ Desviación significativa (|z|&gt;2.58)</div>':'<div class="statline">Dentro de variabilidad normal</div>'}`;
+  const top=(an.top15||[]).slice(0,15);
+  if(!top.length){box.innerHTML='<div class="empty">sin top números</div>';return;}
+  box.innerHTML='<canvas id="freqChart"></canvas>';if(!HAS_CHART){box.innerHTML='<div class="empty">Chart.js offline</div>';return;}
+  charts.freq=new Chart($('#freqChart'),{type:'bar',data:{labels:top.map(t=>t.num),datasets:[{label:'Frecuencia',data:top.map(t=>t.freq),backgroundColor:top.map(t=>t.weight>=2?'#3fb950':(t.weight>=1.5?'#2f81f7':'rgba(139,148,158,.55)')),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'freq '+c.parsed.y,afterLabel:c=>{const t=top[c.dataIndex];return `peso ${t.weight} · rev ${t.si_pct}%`;}}}},
+    scales:{y:{beginAtZero:true,ticks:{precision:0},grid:{color:'rgba(255,255,255,.05)'}},x:{ticks:{font:{size:10}}}}}});
+}
+
+// ── Backtest leaderboard ──────────────────────────────────────────────────────
+let btSort={key:'roi_total_pct',dir:-1};let btCache=null;
+function renderBacktest(bt){
+  btCache=bt;
+  const stats=$('#bt-stats');const tb=$('#bt-tbl').querySelector('tbody');stats.innerHTML='';tb.innerHTML='';
+  if(!bt||!bt.exists){$('#bt-tag').textContent='';tb.innerHTML='<tr><td colspan="11"><div class="empty">Sin backtest_report.json</div></td></tr>';return;}
+  const c=bt.config||{};$('#bt-tag').textContent=`${c.n_test||'?'} test · ₡${(c.budget||0).toLocaleString('en-US')} · ${c.n_tickets||'?'} tickets`;
+  const minis=[['Mejor ROI',bt.best_strategy,'var(--pos)'],['Baseline (random)',pct(bt.baseline_roi),'var(--mut)'],['EV teórico/ses',fmtC(bt.ev_teorico),'var(--neg)'],['Estrategias',bt.strategies.length,'var(--blue)']];
+  minis.forEach(m=>{const d=el('div','mini');d.innerHTML=`<div class="l">${m[0]}</div><div class="v" style="color:${m[2]}">${m[1]==null?'—':m[1]}</div>`;stats.appendChild(d);});
+  const rows=bt.strategies.slice().sort((a,b)=>{const x=a[btSort.key],y=b[btSort.key];return ((x==null?-9e9:x)-(y==null?-9e9:y))*btSort.dir;});
+  const base=bt.baseline_roi;
+  rows.forEach((s,i)=>{
+    const tr=el('tr',(s.name===bt.best_strategy?'best-row ':'')+(s.is_baseline?'base-row':''));
+    const roiC=s.roi_total_pct>0?'pos':(s.roi_total_pct<0?'neg':'muted');
+    const beat=base!=null&&!s.is_baseline?(s.roi_total_pct>base?' ▲':''):'';
+    tr.innerHTML=`<td class="muted">${i+1}</td><td><b>${s.name}</b>${s.is_baseline?' <span class="chip">base</span>':''}</td><td class="muted">${s.profile||''}</td>
+      <td class="num">${pctp(s.hit_rate_pct)}</td><td class="num ${roiC}">${pct(s.roi_total_pct)}${beat}</td>
+      <td class="num ${signClass(s.mean_per_session)}">${fmtC(s.mean_per_session)}</td>
+      <td class="num muted">${fmtCp(s.median)}</td><td class="num">${fmtCp(s.p95)}</td>
+      <td class="num neg">${fmtCp(s.max_drawdown)}</td>
+      <td class="num">${s.z_vs_baseline==null?'—':s.z_vs_baseline}</td>
+      <td class="num ${s.p_value!=null&&s.p_value<0.05?'warnc':'muted'}">${s.p_value==null?'—':s.p_value}</td>`;
+    tb.appendChild(tr);
+  });
+}
+$('#bt-tbl').querySelectorAll('thead th').forEach((th,idx)=>{const keys=[null,'name','profile','hit_rate_pct','roi_total_pct','mean_per_session','median','p95','max_drawdown','z_vs_baseline','p_value'];const k=keys[idx];if(!k)return;th.addEventListener('click',()=>{btSort.dir=(btSort.key===k?-btSort.dir:-1);btSort.key=k;if(btCache)renderBacktest(btCache);});});
+
+// ── Strategy P&L bar ──────────────────────────────────────────────────────────
+function renderStratPnl(pnl){
+  destroy('sp');const box=$('#spbox');
+  const bs=pnl&&pnl.by_strategy?Object.entries(pnl.by_strategy):[];
+  $('#sp-tag').textContent=bs.length?`${bs.length} estrategias jugadas`:'';
+  if(!bs.length){box.innerHTML='<div class="empty">Sin P&amp;L por estrategia todavía (no hay sesiones reconciliadas).</div>';return;}
+  box.innerHTML='<canvas id="spChart"></canvas>';if(!HAS_CHART){box.innerHTML='<div class="empty">Chart.js offline</div>';return;}
+  bs.sort((a,b)=>b[1].net-a[1].net);
+  charts.sp=new Chart($('#spChart'),{type:'bar',data:{labels:bs.map(x=>x[0]),datasets:[{data:bs.map(x=>x[1].net),backgroundColor:bs.map(x=>x[1].net>=0?'rgba(63,185,80,.7)':'rgba(248,81,73,.7)'),borderRadius:5}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtC(c.parsed.y),afterLabel:c=>{const d=bs[c.dataIndex][1];return `n=${d.n} · hits ${d.hits} · ROI ${pct(d.roi)}`;}}}},
+    scales:{y:{ticks:{callback:v=>fmtCp(v)},grid:{color:'rgba(255,255,255,.05)'}},x:{ticks:{font:{size:10},maxRotation:35,minRotation:0}}}}});
+}
+
+// ── header health + clock ─────────────────────────────────────────────────────
+function renderHeader(pipe){
+  const h=$('#health'),tx=$('#healthtx');
+  if(!pipe){h.querySelector('.d').style.background='var(--mut)';tx.textContent='sin conexión';return;}
+  const c=HCOL[pipe.pipeline_health]||'var(--mut)';
+  h.querySelector('.d').style.background=c;h.querySelector('.d').style.boxShadow='0 0 10px '+c;
+  tx.textContent={green:'Saludable',yellow:'Atención',red:'Crítico'}[pipe.pipeline_health]||'—';
+  $('#dataage').textContent=ageStr(pipe.data_age_minutes);
+  $('#uptime').textContent=ageStr(pipe.server_uptime_minutes);
+}
+function tickClock(){const d=new Date();$('#clock').textContent=d.toLocaleTimeString('es-CR',{hour12:false});}
+setInterval(tickClock,1000);tickClock();
+
+// ── main load ─────────────────────────────────────────────────────────────────
+async function loadAll(){
+  if(busy)return;busy=true;
+  $('#ricon').classList.add('spin');$('#rtext').textContent='…';
+  const res=await Promise.allSettled([fJSON(API.pipeline),fJSON(API.bandit),fJSON(API.predictions),fJSON(API.analysis),fJSON(API.backtest),fJSON(API.pnl)]);
+  const [pipe,bandit,preds,an,bt,pnl]=res.map(r=>r.status==='fulfilled'?r.value:null);
+  const failed=res.filter(r=>r.status==='rejected');
+  if(failed.length)toast(failed.length+' endpoint(s) fallaron: '+failed.map(f=>f.reason.message).join(', '));
+  try{renderHeader(pipe);}catch(e){}
+  try{renderKPIs(pipe,preds,pnl,bt,an);}catch(e){console.error(e);}
+  try{renderPipeline(pipe);}catch(e){console.error(e);}
+  try{renderPredictions(preds);}catch(e){console.error(e);}
+  try{renderPnl(pnl);}catch(e){console.error(e);}
+  try{renderBandit(bandit);}catch(e){console.error(e);}
+  try{renderAnalysis(an);}catch(e){console.error(e);}
+  try{renderBacktest(bt);}catch(e){console.error(e);}
+  try{renderStratPnl(pnl);}catch(e){console.error(e);}
+  $('#lastupd').textContent=' · Actualizado '+new Date().toLocaleTimeString('es-CR',{hour12:false});
+  $('#ricon').classList.remove('spin');$('#rtext').textContent='Refrescar';
+  countdown=REFRESH_MS/1000;busy=false;
+}
+$('#refresh').addEventListener('click',loadAll);
+setInterval(()=>{countdown--;if(countdown<=0){loadAll();}$('#rtext').textContent=busy?'…':('Refrescar ('+Math.max(0,countdown)+'s)');},1000);
+loadAll();
+</script>
+</body>
+</html>
+"""
+
+
 # ─── AUTO SCHEDULER ────────────────────────────────────────────────────────────
 # Schedule diario: predict adaptive 50min antes de cada sorteo, fetch+reconcile
 # 30-60min después. Horarios JPS oficiales: 12:55 / 16:30 / 19:30.
@@ -1930,7 +2771,11 @@ def main():
     # y el tráfico externo lleguen. Local: igual sirve en http://localhost:PORT.
     # Override con JPS_HOST=127.0.0.1 si se quiere restringir a loopback.
     host = os.environ.get("JPS_HOST", "0.0.0.0")
-    server = HTTPServer((host, PORT), Handler)
+    # ThreadingHTTPServer: el monitor dispara 6 fetches en paralelo cada 30s y el
+    # console corre el pipeline (fetch bloqueante al API JPS). Con el server
+    # single-thread esas requests se serializaban y el dashboard se quedaba
+    # colgado mientras el pipeline corría. Threading = cada request en su hilo.
+    server = ThreadingHTTPServer((host, PORT), Handler)
     start_scheduler()
     print(f"""
 +--------------------------------------------------------------+
