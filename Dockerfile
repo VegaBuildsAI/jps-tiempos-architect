@@ -30,7 +30,10 @@ COPY jps_edge_tool.py \
      jps_backtest.py \
      jps_predict.py \
      jps_reconcile.py \
+     jps_reconcile_user.py \
      jps_bandit.py \
+     jps_db.py \
+     jps_logging.py \
      jps_randomness_tests.py \
      jps_nist_sts.py \
      jps_diehard.py \

@@ -346,6 +346,7 @@ tr:hover td{background:#fafafa}
     <button class="tb" data-t="anom"    onclick="gTab(this)">🔬 Anomalías</button>
     <button class="tb" data-t="arch"    onclick="gTab(this)">🏛️ Architect</button>
     <button class="tb" data-t="liveday" onclick="gTab(this)">🔴 Live Sesión</button>
+    <button class="tb" data-t="bets"    onclick="gTab(this)">🎟️ Mis Apuestas</button>
   </div>
 
   <div class="tp on" id="tp-last">
@@ -518,6 +519,57 @@ tr:hover td{background:#fafafa}
     </div>
   </div>
 
+  <!-- ══ MIS APUESTAS (Betting Module por usuario, Workstream D) ══ -->
+  <div class="tp" id="tp-bets">
+    <div class="empty" id="bets-empty"><div class="ico">🎟️</div>Corre el Pipeline para cargar el Top-25 y armar tu apuesta</div>
+    <div id="bets-main" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#888">Apuesta manual — <span id="bets-user" style="color:#0F6E56">—</span></div>
+        <div id="bets-summary" style="font-size:12px;color:#555"></div>
+      </div>
+      <div class="cfg" style="flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px">
+        <div class="cg"><span class="cl">Sesión</span>
+          <select id="bet-session">
+            <option value="manana">Mañana (~12:55)</option>
+            <option value="mediaTarde" selected>Media Tarde (~16:30)</option>
+            <option value="tarde">Tarde (~19:30)</option>
+          </select>
+        </div>
+        <div class="cg"><span class="cl">Fecha sorteo</span>
+          <input type="date" id="bet-date" style="border:1.5px solid #ddd;border-radius:7px;padding:5px 9px;font-size:13px;background:#fff;color:#111">
+        </div>
+        <div class="cg"><span class="cl">Base ₡ / número</span>
+          <input type="number" id="bet-base" value="200" min="100" step="100" style="width:90px" oninput="updateBetSelSummary()">
+        </div>
+        <div class="cg"><span class="cl">Rev ₡ (0 o ≤ base)</span>
+          <input type="number" id="bet-rev" value="100" min="0" step="100" style="width:90px" oninput="updateBetSelSummary()">
+        </div>
+        <button class="btn-run" id="bet-submit" onclick="submitUserBet()" style="min-width:auto">💾 Guardar apuesta</button>
+      </div>
+      <div id="bet-editing" style="display:none;font-size:12px;background:#FFF7E6;border:1px solid #F0D9A8;border-radius:7px;padding:7px 11px;margin-bottom:10px;color:#8A6D3B">✏️ Editando la apuesta de <b><span id="bet-editing-key"></span></b> — guardá para sobrescribir, o <a href="#" onclick="cancelBetEdit();return false" style="color:#0F6E56;font-weight:700">cancelar</a>.</div>
+      <div id="bet-msg" style="font-size:12px;margin-bottom:10px;min-height:16px"></div>
+      <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px">Top-25 sugerido &nbsp;<span style="color:#999;font-weight:400">(⭐ = recomendado por Architect · clic para elegir)</span></div>
+      <div id="bet-chips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:6px"></div>
+      <div id="bet-top-note" style="display:none;font-size:12px;color:#999;margin-bottom:6px">Corré el Pipeline para ver el Top-25 sugerido. Igual podés apostar a tus propios números aquí abajo. 👇</div>
+      <!-- SECCIÓN: números propios (el usuario elige cualquier número 00-99) -->
+      <div style="background:#F6F8FA;border:1px solid #e5e8ec;border-radius:9px;padding:11px 13px;margin:10px 0 14px">
+        <div style="font-size:11px;font-weight:800;color:#0F6E56;margin-bottom:7px">✍️ Números propios <span style="color:#999;font-weight:400">— elegí cualquier número 00–99</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="bet-custom-input" placeholder="ej: 7 13 88, 04" style="flex:1;min-width:180px;border:1.5px solid #ddd;border-radius:7px;padding:6px 10px;font-size:13px;font-family:monospace;background:#fff;color:#111" onkeydown="if(event.key==='Enter'){addCustomNumbers();event.preventDefault();}">
+          <button class="btn-run" style="min-width:auto;background:#0F6E56" onclick="addCustomNumbers()">➕ Agregar</button>
+        </div>
+        <div id="bet-custom-chips" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px"></div>
+      </div>
+      <div id="bet-selsummary" style="font-size:12px;color:#333;margin-bottom:16px"></div>
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#888;border-top:1.5px solid #ebebeb;padding-top:12px;margin-bottom:8px">Mi historial</div>
+      <div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:#888;font-size:10px;text-transform:uppercase">
+          <th style="padding:6px 8px">Fecha</th><th>Sesión</th><th>Números</th><th style="text-align:right">Monto</th><th>Estado</th><th style="text-align:right">Neto</th><th>vs Architect</th><th>Acciones</th></tr></thead>
+        <tbody id="bet-hist"></tbody></table></div>
+      <div class="disc" style="margin-top:14px">Todos los números tienen exactamente la misma probabilidad en un sistema aleatorio. No se garantiza ningún resultado. Tu apuesta manual se guarda aparte y NO afecta al aprendizaje del bandit del sistema.</div>
+    </div>
+  </div>
+
 </div>
 
 </div>
@@ -562,6 +614,173 @@ function gTab(btn){
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
   btn.classList.add('on');
   document.getElementById('tp-'+btn.dataset.t).classList.add('on');
+  if(btn.dataset.t==='bets') loadBetsPanel();
+}
+
+// ── BETTING MODULE (Mis Apuestas, Workstream D) ────────────────────────────────
+let BET_SEL=new Set(), BET_HIST=[], BET_EDIT_ID=null;
+function _betRecommended(){
+  // "recomendado por Architect" ≈ top-5 por peso combinado del top-25
+  return [...S.top25].sort((a,b)=>b.weight-a.weight).slice(0,5).map(n=>n.num_str);
+}
+function loadBetsPanel(){
+  const empty=document.getElementById('bets-empty'), main=document.getElementById('bets-main');
+  // Usable siempre: podés apostar tus propios números aunque no hayas corrido el Pipeline.
+  if(empty)empty.style.display='none';
+  if(main)main.style.display='';
+  const d=document.getElementById('bet-date'); if(d&&!d.value) d.value=localDateStr();
+  renderBetChips();
+  loadUserBetsHistory();
+}
+function _chipStyle(sel,color){color=color||'#0F6E56';return 'cursor:pointer;font-family:monospace;font-weight:800;font-size:14px;padding:6px 11px;border-radius:8px;border:1.5px solid '+(sel?color:'#ddd')+';background:'+(sel?color:'#fff')+';color:'+(sel?'#fff':'#111');}
+function renderBetChips(){
+  const rec=new Set(_betRecommended());
+  const box=document.getElementById('bet-chips'), note=document.getElementById('bet-top-note');
+  if(box)box.innerHTML='';
+  if(!S.top25||!S.top25.length){ if(note)note.style.display=''; }
+  else{
+    if(note)note.style.display='none';
+    [...S.top25].sort((a,b)=>b.weight-a.weight).forEach(n=>{
+      const sel=BET_SEL.has(n.num_str);
+      const c=document.createElement('button');
+      c.textContent=(rec.has(n.num_str)?'⭐':'')+n.num_str;
+      c.title='peso '+n.weight+' · rev '+(n.si_pct||0)+'%';
+      c.style.cssText=_chipStyle(sel);
+      c.onclick=()=>{ BET_SEL.has(n.num_str)?BET_SEL.delete(n.num_str):BET_SEL.add(n.num_str); renderBetChips(); };
+      if(box)box.appendChild(c);
+    });
+  }
+  renderCustomChips();
+  updateBetSelSummary();
+}
+function renderCustomChips(){
+  const box=document.getElementById('bet-custom-chips'); if(!box)return; box.innerHTML='';
+  const top=new Set((S.top25||[]).map(n=>n.num_str));
+  const customs=[...BET_SEL].filter(x=>!top.has(x)).sort();
+  if(!customs.length){box.innerHTML='<span style="font-size:12px;color:#aaa">Sin números propios todavía.</span>';return;}
+  customs.forEach(num=>{
+    const c=document.createElement('button');
+    c.innerHTML=num+' <span style="opacity:.75">✕</span>';
+    c.title='quitar';
+    c.style.cssText='cursor:pointer;font-family:monospace;font-weight:800;font-size:14px;padding:6px 11px;border-radius:8px;border:1.5px solid #C86A00;background:#C86A00;color:#fff';
+    c.onclick=()=>{BET_SEL.delete(num);renderBetChips();};
+    box.appendChild(c);
+  });
+}
+function addCustomNumbers(){
+  const inp=document.getElementById('bet-custom-input'); if(!inp)return;
+  const toks=(inp.value||'').split(/[^0-9]+/).filter(x=>x!=='');
+  let added=0, bad=[];
+  toks.forEach(t=>{const n=parseInt(t,10); if(n>=0&&n<=99){BET_SEL.add(String(n).padStart(2,'0'));added++;} else bad.push(t);});
+  inp.value='';
+  const msg=document.getElementById('bet-msg');
+  if(bad.length){msg.style.color='#C0392B';msg.textContent='Ignorados (fuera de 00-99): '+bad.join(', ');}
+  else if(added){msg.style.color='#0F6E56';msg.textContent='Agregados '+added+' número(s) propio(s).';}
+  renderBetChips();
+}
+function editBet(id){
+  const b=(BET_HIST||[]).find(x=>x.id===id); if(!b)return;
+  if(b.locked){return;}
+  BET_EDIT_ID=id;
+  BET_SEL=new Set((b.tickets||[]).map(t=>t.num));
+  const first=(b.tickets||[])[0]||{};
+  const $=x=>document.getElementById(x);
+  if($('bet-base'))$('bet-base').value=first.base||200;
+  if($('bet-rev'))$('bet-rev').value=first.rev||0;
+  if($('bet-session'))$('bet-session').value=b.session;
+  if($('bet-date'))$('bet-date').value=b.draw_date;
+  if($('bet-editing'))$('bet-editing').style.display='';
+  if($('bet-editing-key'))$('bet-editing-key').textContent=b.draw_date+' '+b.session;
+  renderBetChips();
+  const p=$('tp-bets'); if(p)p.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function cancelBetEdit(){
+  BET_EDIT_ID=null; BET_SEL=new Set();
+  const e=document.getElementById('bet-editing'); if(e)e.style.display='none';
+  const m=document.getElementById('bet-msg'); if(m)m.textContent='';
+  renderBetChips();
+}
+async function deleteBet(id){
+  const b=(BET_HIST||[]).find(x=>x.id===id);
+  if(!confirm('¿Eliminar la apuesta de '+(b?b.draw_date+' '+b.session:id)+'?'))return;
+  const msg=document.getElementById('bet-msg');
+  try{
+    const r=await fetch('/api/user-bet/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bet_id:id})});
+    const j=await r.json();
+    if(!r.ok){msg.style.color='#C0392B';msg.textContent='✗ '+(j.error||('HTTP '+r.status));return;}
+    msg.style.color='#0F6E56';msg.textContent='✓ Apuesta eliminada.';
+    if(BET_EDIT_ID===id)cancelBetEdit();
+    loadUserBetsHistory();
+  }catch(e){msg.style.color='#C0392B';msg.textContent='✗ '+e.message;}
+}
+function updateBetSelSummary(){
+  const base=parseInt(document.getElementById('bet-base').value)||0;
+  const rev=parseInt(document.getElementById('bet-rev').value)||0;
+  const n=BET_SEL.size, total=n*(base+rev);
+  const el=document.getElementById('bet-selsummary'); if(!el)return;
+  el.innerHTML= n? ('<b>'+n+'</b> número(s) × (₡'+base+' base + ₡'+rev+' rev) = <b>'+fmtC(total)+'</b>') : '<span style="color:#999">Sin números seleccionados</span>';
+}
+async function submitUserBet(){
+  const msg=document.getElementById('bet-msg');
+  const base=parseInt(document.getElementById('bet-base').value)||0;
+  const rev=parseInt(document.getElementById('bet-rev').value)||0;
+  if(!BET_SEL.size){msg.style.color='#C0392B';msg.textContent='Elegí al menos un número.';return;}
+  if(base<100||base%100){msg.style.color='#C0392B';msg.textContent='Base debe ser ≥₡100 y múltiplo de 100.';return;}
+  if(rev<0||rev%100){msg.style.color='#C0392B';msg.textContent='Rev debe ser 0 o múltiplo de ₡100.';return;}
+  if(rev>base){msg.style.color='#C0392B';msg.textContent='Rev no puede superar base (rev ≤ base).';return;}
+  const tickets=[...BET_SEL].map(num=>({num,base,rev}));
+  const body={session:document.getElementById('bet-session').value,draw_date:document.getElementById('bet-date').value,
+    tickets, architect_snapshot:{recommended:_betRecommended(),budget:parseInt(document.getElementById('budget').value)||null,profile:document.getElementById('profile').value},
+    anomalies_snapshot:{n_valid:S.totalValid,top25:S.top25.map(n=>n.num_str)}};
+  msg.style.color='#555';msg.textContent='Guardando…';
+  try{
+    const r=await fetch('/api/user-bet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!r.ok){msg.style.color='#C0392B';msg.textContent='✗ '+(j.error||('HTTP '+r.status));return;}
+    BET_EDIT_ID=null; BET_SEL=new Set();
+    const eb=document.getElementById('bet-editing'); if(eb)eb.style.display='none';
+    renderBetChips();
+    msg.style.color='#0F6E56';msg.textContent='✓ Apuesta guardada ('+fmtC(j.amount)+')'+(j.edited?' — editada':'')+'. Se auditará automáticamente tras el sorteo.';
+    loadUserBetsHistory();
+  }catch(e){msg.style.color='#C0392B';msg.textContent='✗ '+e.message;}
+}
+async function loadUserBetsHistory(){
+  try{
+    const r=await fetch('/api/user-bets',{cache:'no-store'});
+    if(!r.ok)return;
+    const j=await r.json();
+    const uEl=document.getElementById('bets-user'); if(uEl)uEl.textContent=j.user||'—';
+    const s=j.summary||{};
+    const sumEl=document.getElementById('bets-summary');
+    if(sumEl)sumEl.innerHTML= s.n_audited? ('Auditadas <b>'+s.n_audited+'</b> · hits <b>'+s.hits+'</b> ('+s.hit_rate_pct+'%) · neto <b style="color:'+(s.net_total>=0?'#0F6E56':'#C0392B')+'">'+fmtC(s.net_total)+'</b> · ROI '+s.roi_pct+'%') : '<span style="color:#999">Sin sesiones auditadas todavía</span>';
+    BET_HIST=j.bets||[];
+    const aud={}; (j.audits||[]).forEach(a=>{aud[a.draw_date+'-'+a.session]=a.result;});
+    const tb=document.getElementById('bet-hist'); if(!tb)return; tb.innerHTML='';
+    if(!BET_HIST.length){tb.innerHTML='<tr><td colspan="8" style="padding:12px;color:#999">No has guardado apuestas todavía.</td></tr>';return;}
+    BET_HIST.forEach(b=>{
+      const res=aud[b.draw_date+'-'+b.session];
+      const nums=(b.tickets||[]).map(t=>t.num+(t.in_top25===false?'*':'')).join(' ');
+      const rec=(b.architect_snapshot&&b.architect_snapshot.recommended)||[];
+      const overlap=(b.tickets||[]).filter(t=>rec.includes(t.num)).length;
+      let estado='<span style="color:#C69200">pending</span>', neto='—';
+      if(res){const rr=res.resumen||{};const win=(rr.neto_total||0)>0;
+        estado='<span style="font-weight:800;color:'+(win?'#0F6E56':'#C0392B')+'">'+(rr.estado||'')+'</span>';
+        neto='<span style="color:'+(win?'#0F6E56':'#C0392B')+'">'+fmtC(rr.neto_total||0)+'</span>';}
+      const bs='cursor:pointer;border:1px solid #ddd;background:#fff;border-radius:6px;padding:3px 8px;font-size:12px;margin-right:4px';
+      const actions=b.locked
+        ? '<span title="El resultado ya salió: no editable ni eliminable" style="color:#999">🔒 cerrada</span>'
+        : '<button style="'+bs+'" onclick="editBet(\''+b.id+'\')">✏️ Editar</button>'+
+          '<button style="'+bs+';color:#C0392B;border-color:#eecccc" onclick="deleteBet(\''+b.id+'\')">🗑️</button>';
+      const tr=document.createElement('tr'); tr.style.borderTop='1px solid #eee';
+      tr.innerHTML='<td style="padding:6px 8px;font-family:monospace">'+b.draw_date+'</td><td>'+b.session+'</td>'+
+        '<td style="font-family:monospace;font-weight:700">'+nums+'</td>'+
+        '<td style="text-align:right">'+fmtC(b.amount)+'</td>'+
+        '<td>'+estado+'</td><td style="text-align:right">'+neto+'</td>'+
+        '<td>'+overlap+'/'+(b.tickets||[]).length+' ⭐</td>'+
+        '<td>'+actions+'</td>';
+      tb.appendChild(tr);
+    });
+  }catch(e){}
 }
 function showTab(t){document.querySelector('[data-t="'+t+'"]').click();}
 function r100(x){return(Math.floor(x/100)*100);}

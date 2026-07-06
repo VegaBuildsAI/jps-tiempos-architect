@@ -202,6 +202,8 @@ def api_get(endpoint: str) -> dict:
             if raw_bytes[:2] == b'\x1f\x8b':
                 raw_bytes = _gzip.decompress(raw_bytes)
             raw = raw_bytes.decode("utf-8")
+            if not raw.strip():
+                return []          # el API devuelve body vacío para rangos sin datos/inválidos
             return json.loads(raw)
     except urllib.error.HTTPError as e:
         body = ""
@@ -214,31 +216,206 @@ def api_get(endpoint: str) -> dict:
         raise RuntimeError(f"No se pudo conectar a {url}: {e.reason}")
 
 
+def _safe_log(component, event, detail=None):
+    """Loguea vía jps_logging si está disponible; nunca lanza (observabilidad opt-in)."""
+    try:
+        from jps_logging import log_event
+        log_event(component, event, detail)
+    except Exception:
+        pass
+
+
+def _raw_day_records(data) -> List[dict]:
+    """Extrae la lista de día-registros CRUDOS (con slots manana/mediaTarde/tarde),
+    sin aplanar. Acepta lista directa, dict con clave data/results/sorteos, o un
+    único día-registro."""
+    if isinstance(data, list):
+        return [d for d in data if isinstance(d, dict)]
+    if isinstance(data, dict):
+        for k in ("data", "results", "sorteos", "items", "historico"):
+            v = data.get(k)
+            if isinstance(v, list):
+                return [d for d in v if isinstance(d, dict)]
+        # ¿un único día-registro (tiene 'dia' o slots)?
+        if data.get("dia") or any(k in data for k in SESSION_KEYS):
+            return [data]
+    return []
+
+
+def _fetch_history_chunked(window_days=150, max_lookback_days=3650, max_empty=2):
+    """Baja el histórico COMPLETO en ventanas hacia atrás. El API de JPS devuelve
+    vacío si el rango es muy amplio (probado: 2020→2026 = body vacío), pero acepta
+    ventanas acotadas (~150 días). Camina desde hoy hacia atrás, ventana por
+    ventana (sin solaparse), y corta tras `max_empty` ventanas seguidas sin datos
+    nuevos (= llegó al inicio del histórico) o al tope de `max_lookback_days`."""
+    fmt = "%Y-%m-%dT%H:%M:%S"
+    end = datetime.now()
+    floor = end - timedelta(days=max_lookback_days)
+    all_records, seen = [], set()
+    empty_streak = 0
+    cur_end = end
+    while cur_end > floor:
+        cur_start = max(cur_end - timedelta(days=window_days), floor)
+        ep = (f"/api/App/nuevostiempos/historical"
+              f"?fechaInicio={cur_start.strftime(fmt)}&fechaFin={cur_end.strftime(fmt)}")
+        try:
+            data = api_get(ep)
+        except Exception as e:
+            print(f"  ⚠ ventana {cur_start.date()} → {cur_end.date()}: {e}")
+            data = None
+        recs = _raw_day_records(data) if data is not None else []
+        new = 0
+        for r in recs:
+            dia = str(r.get("dia", ""))[:10]
+            if dia and dia not in seen:
+                seen.add(dia); all_records.append(r); new += 1
+        print(f"  {cur_start.date()} → {cur_end.date()}: {len(recs)} registros ({new} nuevos)")
+        empty_streak = empty_streak + 1 if new == 0 else 0
+        if empty_streak >= max_empty:
+            print(f"  ↳ {max_empty} ventanas seguidas sin datos nuevos — fin del histórico.")
+            break
+        cur_end = cur_start - timedelta(days=1)
+    return all_records
+
+
+def _load_accumulated() -> dict:
+    """Carga historical_accumulated.json (dict keyed por fecha). {} si no existe."""
+    try:
+        acc = load_json("historical_accumulated.json")
+        return acc if isinstance(acc, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+def _accumulated_to_list(acc: dict) -> List[dict]:
+    """Lista de día-registros ordenada por fecha (ascendente)."""
+    return [acc[k] for k in sorted(acc.keys())]
+
+
+def merge_days_into_accumulated(new_day_records: List[dict]) -> dict:
+    """Fusiona día-registros en historical_accumulated.json (merge, NUNCA
+    sobreescribe a ciegas — invariante) y regenera historical_data.json (lista)
+    para que analyze/predict/reconcile consuman el histórico completo.
+    Reusa merge_records() de jps_accumulate. Devuelve el reporte de validación."""
+    from jps_accumulate import merge_records
+    acc = _load_accumulated()
+    before = len(acc)
+    added, corrected = merge_records(acc, new_day_records)
+    save_json(acc, "historical_accumulated.json")
+    save_json(_accumulated_to_list(acc), "historical_data.json")
+    report = validate_history(acc)
+    report.update(days_before=before, days_added=added, slots_corrected=corrected)
+    return report
+
+
+def validate_history(acc: dict) -> dict:
+    """Valida el histórico acumulado: cuenta sorteos (slots con numero no nulo),
+    rango de fechas, y reporta huecos (días de calendario sin registro y días con
+    <3 slots cerrados). Sirve para el requisito de conteo (~526) y observabilidad."""
+    draws = _extract_draws(_accumulated_to_list(acc))
+    n_draws = len(draws)
+    dates = sorted(k for k in acc.keys() if isinstance(k, str) and k[:4].isdigit())
+    first_date = dates[0] if dates else None
+    last_date = dates[-1] if dates else None
+
+    missing_dates, incomplete_days = [], []
+    expected_draws = 0
+    if first_date and last_date:
+        try:
+            d0 = datetime.strptime(first_date, "%Y-%m-%d").date()
+            d1 = datetime.strptime(last_date, "%Y-%m-%d").date()
+            present = set(dates)
+            cur = d0
+            while cur <= d1:
+                key = cur.isoformat()
+                expected_draws += 3
+                if key not in present:
+                    missing_dates.append(key)
+                else:
+                    rec = acc.get(key, {})
+                    filled = sum(
+                        1 for slot in SESSION_KEYS
+                        if isinstance(rec.get(slot), dict) and rec[slot].get("numero") is not None
+                    )
+                    if filled < 3:
+                        incomplete_days.append({"date": key, "slots": filled})
+                cur += timedelta(days=1)
+        except Exception:
+            pass
+
+    return {
+        "n_days": len(dates),
+        "n_draws": n_draws,
+        "first_date": first_date,
+        "last_date": last_date,
+        "expected_draws_calendar": expected_draws,
+        "missing_dates_count": len(missing_dates),
+        "missing_dates": missing_dates[:60],
+        "incomplete_days_count": len(incomplete_days),
+        "incomplete_days": incomplete_days[:60],
+    }
+
+
+def _print_history_validation(rep: dict):
+    print(f"\n  ── Validación de histórico ──")
+    print(f"  Días acumulados     : {rep.get('n_days', 0)}"
+          f"  (nuevos +{rep.get('days_added', 0)}, correcciones {rep.get('slots_corrected', 0)})")
+    print(f"  Sorteos válidos     : {rep.get('n_draws', 0)}")
+    print(f"  Rango               : {rep.get('first_date')} → {rep.get('last_date')}")
+    print(f"  Esperado (calendario): {rep.get('expected_draws_calendar', 0)} "
+          f"(3/día; 'tarde' a veces no cierra)")
+    print(f"  Días sin registro   : {rep.get('missing_dates_count', 0)}")
+    print(f"  Días incompletos    : {rep.get('incomplete_days_count', 0)}")
+
+
 def cmd_fetch(args):
     print("\n═══ FETCH ═══")
+    # --full (o --days 0) implica modo histórico: bootstrap del histórico COMPLETO.
+    # Sin esto, `fetch --full` caía al modo 'last' (default) y solo agregaba 1 día.
+    if getattr(args, "full", False) or getattr(args, "days", 60) == 0:
+        args.mode = "history"
     if args.mode == "last":
         print("Consultando último resultado...")
         data = api_get("/api/App/nuevostiempos/last")
         save_json(data, "last_result.json")
         _print_last_result(data)
+        # Cadencia diaria: mergear ESTE día en el acumulado y regenerar el working
+        # dataset. Un fetch 'last' NO debe perder el histórico ya acumulado.
+        rep = merge_days_into_accumulated(_raw_day_records(data))
+        _print_history_validation(rep)
+        _safe_log("fetch", "last", {"n_draws": rep.get("n_draws"),
+                                    "days_added": rep.get("days_added"),
+                                    "last_date": rep.get("last_date")})
 
     elif args.mode == "history":
         days = getattr(args, "days", 60)
-        end   = datetime.now()
-        start = end - timedelta(days=days)
-        fmt   = "%Y-%m-%dT%H:%M:%S"
-        print(f"Consultando histórico: {start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')} ({days} días)...")
-        endpoint = (
-            f"/api/App/nuevostiempos/historical"
-            f"?fechaInicio={start.strftime(fmt)}&fechaFin={end.strftime(fmt)}"
-        )
-        data = api_get(endpoint)
-        save_json(data, "historical_data.json")
-        items = data.get("data", data) if isinstance(data, dict) else data
-        if isinstance(items, list):
-            print(f"  Registros recibidos: {len(items)}")
+        full = bool(getattr(args, "full", False)) or days == 0
+        if full:
+            # El API no acepta rangos muy amplios (devuelve vacío) → bajar por ventanas.
+            print("Consultando histórico COMPLETO (por ventanas, el API rechaza rangos muy amplios)...")
+            day_records = _fetch_history_chunked()
         else:
-            print("  Respuesta guardada (verificar estructura en historical_data.json)")
+            end   = datetime.now()
+            start = end - timedelta(days=days)
+            fmt   = "%Y-%m-%dT%H:%M:%S"
+            print(f"Consultando histórico ({days} días): {start.strftime('%Y-%m-%d')} → {end.strftime('%Y-%m-%d')}...")
+            endpoint = (
+                f"/api/App/nuevostiempos/historical"
+                f"?fechaInicio={start.strftime(fmt)}&fechaFin={end.strftime(fmt)}"
+            )
+            data = api_get(endpoint)
+            day_records = _raw_day_records(data)
+        print(f"  Registros recibidos: {len(day_records)}")
+        # Mergear (nunca sobreescribir a ciegas) y regenerar historical_data.json.
+        rep = merge_days_into_accumulated(day_records)
+        _print_history_validation(rep)
+        _safe_log("fetch", "history_full" if full else "history_window",
+                  {"days": days, "full": full, "received": len(day_records),
+                   "n_draws": rep.get("n_draws"), "first_date": rep.get("first_date"),
+                   "last_date": rep.get("last_date"),
+                   "missing_dates_count": rep.get("missing_dates_count")})
     elif args.mode == "page":
         print("Consultando página Nuevos Tiempos (/page)...")
         data = api_get("/api/App/nuevostiempos/page")
@@ -1213,7 +1390,10 @@ def main():
     # fetch
     p_fetch = sub.add_parser("fetch", help="Obtener datos del API JPS (corre localmente)")
     p_fetch.add_argument("--mode", choices=["last", "history", "page"], default="last")
-    p_fetch.add_argument("--days", type=int, default=60, help="Días de histórico (default: 60)")
+    p_fetch.add_argument("--days", type=int, default=60,
+                         help="Días de histórico (default: 60). --days 0 = histórico COMPLETO")
+    p_fetch.add_argument("--full", action="store_true",
+                         help="Bootstrap del histórico COMPLETO (rango amplio, merge en acumulado)")
 
     # import-page-stats
     p_ips = sub.add_parser(

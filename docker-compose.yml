@@ -1,0 +1,39 @@
+# JPS Tiempos Lab — entorno local con paridad Railway (Workstream E)
+#
+# Levanta el MISMO Dockerfile que usa Railway (railway.json → builder DOCKERFILE),
+# montando ./data_local como el volumen persistente que en producción vive en /data.
+# Esto permite probar TODO (fetch/analyze/predict/commit/reconcile, logging,
+# multi-usuario, betting module) contra http://localhost:7788 antes de desplegar.
+#
+# Uso:
+#   docker compose up --build
+#   → http://localhost:7788   (login con los usuarios de prueba de abajo)
+#
+# SEMILLA DE DATOS: ./data_local está sembrado con la copia LOCAL PARCIAL del
+# histórico (~87 días / 61-261 sorteos según archivo). NO es el histórico
+# completo de producción (~520+). Por lo tanto la validación de conteo del
+# Workstream A ("≈526 sorteos") SOLO puede confirmarse corriendo el bootstrap
+# `fetch --full` en Railway (o en una máquina con acceso real al API JPS, que
+# está bloqueado en el sandbox). Local sirve para validar la LÓGICA, no la cifra.
+
+services:
+  jps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jps-tiempos:local
+    container_name: jps-tiempos-local
+    ports:
+      - "7788:7788"
+    environment:
+      JPS_DATA_DIR: /data
+      PORT: "7788"
+      JPS_HOST: 0.0.0.0
+      # Usuarios de PRUEBA (no reales) para ejercitar login multi-usuario + betting.
+      JPS_USERS: "michael:test123,laura:test456"
+      # Secret de sesión fijo en local (en Railway se genera/persiste solo).
+      JPS_SESSION_SECRET: "local-dev-secret-not-for-prod"
+    volumes:
+      # Volumen persistente equivalente al de Railway (/data). Gitignored.
+      - ./data_local:/data
+    restart: unless-stopped

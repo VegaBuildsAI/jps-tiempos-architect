@@ -158,6 +158,15 @@ def _append_jsonl(record: dict):
     p = repo_path(LOG_FILE)
     with open(p, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    try:
+        from jps_logging import log_event
+        log_event("predict", record.get("status", "created"), {
+            "id": record.get("id"), "draw_date": record.get("draw_date"),
+            "session": record.get("session"), "strategy": record.get("strategy"),
+            "n_tickets": record.get("n_tickets") or len(record.get("tickets", []) or []),
+        })
+    except Exception:
+        pass
 
 
 def main():

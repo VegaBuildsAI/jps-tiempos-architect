@@ -30,10 +30,19 @@ from jps_edge_tool import (
     _extract_draws,
     payout_ticket,
     load_json,
+    save_json,
     path as repo_path,
 )
 
 LOG_FILE = "predictions_log.jsonl"
+
+
+def _safe_log(component, event, detail=None):
+    try:
+        from jps_logging import log_event
+        log_event(component, event, detail)
+    except Exception:
+        pass
 
 
 def _load_log() -> List[dict]:
@@ -163,6 +172,80 @@ def _reconcile_one(prediction: dict, result: dict) -> dict:
     }
 
 
+# Orden cronológico de sesiones dentro de un día (para elegir la última reconciliada).
+_SESSION_ORDER = {"manana": 0, "mediatarde": 1, "tarde": 2}
+
+
+def _audit_from_reconciled(rec: dict) -> dict:
+    """Traduce un registro reconciled al esquema de audit_result.json (el mismo
+    que emite `jps_edge_tool.py audit`), para que el monitor tenga una Auditoría
+    real sin intervención manual post-sorteo."""
+    res = rec.get("result", {}) or {}
+    rows = []
+    for i, t in enumerate(res.get("tickets_detail", []), 1):
+        base = int(t.get("base", 0) or 0)
+        rev = int(t.get("rev", 0) or 0)
+        cost = base + rev
+        neto = t.get("neto", 0) or 0
+        rows.append({
+            "ticket": i,
+            "num_exacto": str(t.get("num", "")).zfill(2),
+            "base": base,
+            "rev": rev,
+            "ticket_total": cost,
+            "hit_exacto": bool(t.get("hit")),
+            "recuperado": t.get("recuperado", 0) or 0,
+            "neto": neto,
+            "roi": round(neto / cost, 4) if cost else 0,
+        })
+    total_apostado = res.get("total_cost", 0) or 0
+    total_recuperado = res.get("total_recuperado", 0) or 0
+    neto_total = res.get("total_neto", total_recuperado - total_apostado) or 0
+    roi_total = neto_total / total_apostado if total_apostado else 0
+    estado = "WIN ✓" if neto_total > 0 else ("EMPATE" if neto_total == 0 else "LOSS ✗")
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source": "reconcile",
+        "draw_date": rec.get("draw_date"),
+        "session": rec.get("session"),
+        "strategy": rec.get("strategy"),
+        "resultado_exacto": res.get("drawn_exacto"),
+        "resultado_reventada": res.get("drawn_reventada"),
+        "resultado_mega": res.get("drawn_mega"),
+        "tickets": rows,
+        "resumen": {
+            "total_apostado": total_apostado,
+            "total_recuperado": total_recuperado,
+            "neto_total": neto_total,
+            "roi_total": round(roi_total, 4),
+            "estado": estado,
+        },
+    }
+
+
+def _write_latest_audit(reconciled_all: List[dict]) -> Optional[dict]:
+    """Emite audit_result.json para la sesión reconciliada más reciente.
+
+    Antes este archivo sólo existía si el usuario corría `audit` a mano, así que
+    en Railway quedaba permanentemente en 'no existe'. Ahora el reconcile —que ya
+    corre en el pipeline automático— lo regenera con el último resultado cruzado.
+    """
+    if not reconciled_all:
+        return None
+
+    def _key(r):
+        return (
+            r.get("draw_date") or "",
+            _SESSION_ORDER.get((r.get("session") or "").lower(), 9),
+            r.get("reconciled_at") or "",
+        )
+
+    latest = max(reconciled_all, key=_key)
+    audit = _audit_from_reconciled(latest)
+    save_json(audit, "audit_result.json")
+    return audit
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="JPS Tiempos Lab — reconcilia predicciones pending contra resultados reales",
@@ -230,6 +313,11 @@ def main():
             newly_reconciled.append(new_record)
             hit_mark = " ★ HIT" if outcome["any_hit"] else ""
             print(f"  ✓ {pid}: drawn={outcome['drawn_exacto']} rev={outcome['drawn_reventada']} → ROI={outcome['roi']*100:+.2f}%{hit_mark}")
+            _safe_log("reconcile", "reconciled", {
+                "id": pid, "draw_date": pred.get("draw_date"), "session": pred.get("session"),
+                "strategy": pred.get("strategy"), "hit": outcome["any_hit"],
+                "net": outcome.get("total_neto"), "roi": outcome.get("roi"),
+            })
         else:
             still_pending.append(pred)
             print(f"  ⏳ {pid}: aún no hay resultado en historical_data.json")
@@ -297,6 +385,20 @@ def main():
         for s, info in sorted(by_strat.items(), key=lambda x: x[1]["neto"], reverse=True):
             r = info["neto"] / info["cost"] if info["cost"] else 0
             print(f"    {s:<28} n={info['n']:>3}  hits={info['hits']:>3} ({info['hits']/info['n']*100:5.2f}%)  ROI={r*100:+7.2f}%")
+
+    # ── Emitir audit_result.json con la última sesión reconciliada (automático)
+    if reconciled_all and not args.dry_run:
+        try:
+            a = _write_latest_audit(reconciled_all)
+            if a:
+                rs = a["resumen"]
+                print(f"  ✓ audit_result.json → {a['draw_date']} {a['session']} "
+                      f"({rs['estado']}, neto ₡{rs['neto_total']:+,})")
+                _safe_log("reconcile", "audit_written",
+                          {"draw_date": a["draw_date"], "session": a["session"],
+                           "estado": rs["estado"], "neto": rs["neto_total"]})
+        except Exception as e:
+            print(f"  ⚠ No se pudo escribir audit_result.json: {e}")
 
     print(f"\n  Aún pending: {len(still_pending)}")
     print()

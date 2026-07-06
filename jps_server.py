@@ -22,6 +22,9 @@ else:
         _sys.stdout.buffer, encoding="utf-8", errors="replace"
     )
 
+import base64
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -36,7 +39,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
@@ -60,6 +63,21 @@ DATA_DIR = os.environ.get("JPS_DATA_DIR", HERE)
 if DATA_DIR != HERE and not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR, exist_ok=True)
 
+# Env para subprocesos Python (simulador/reconcile/backtest/predict/fetch): fuerza
+# UTF-8 en el stdio del hijo. En Windows el default es cp1252 y estos scripts
+# imprimen box-drawing/✓/₡/★ → UnicodeEncodeError cuando su stdout es un pipe
+# (subprocess.run con capture_output). En Linux/Railway ya es UTF-8; esto sólo
+# lo hace idéntico y robusto en ambos entornos.
+_CHILD_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
+# Logging de observabilidad (Workstream B). Import guardado: si el módulo no está
+# (deploy viejo), degrada a no-op sin romper el server.
+try:
+    from jps_logging import log_event as _log_event
+except Exception:
+    def _log_event(*_a, **_k):
+        pass
+
 # In-memory state (persists while server runs)
 STATE = {
     "draws": [], "top25": [], "last": None, "output": None,
@@ -67,6 +85,9 @@ STATE = {
     "auto_log":    [],
     "auto_result": None,
     "auto_started_at": None,  # epoch segundos de la última corrida auto completada
+    "backtest_status": "idle",   # idle | running | done | error
+    "backtest_log":    [],
+    "backtest_started_at": None,  # epoch segundos del último backtest completado
 }
 
 # Auto-pipeline: lock para evitar corridas concurrentes + TTL de caché (segundos).
@@ -355,11 +376,50 @@ def run_simulador():
         raise FileNotFoundError("simulador.py no encontrado en " + HERE)
     result = subprocess.run(
         [sys.executable, sim_path],
-        capture_output=True, text=True, cwd=HERE, timeout=90
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        cwd=HERE, timeout=90, env=_CHILD_ENV
     )
     if result.returncode != 0:
         raise RuntimeError("simulador.py salió con error:\n" + result.stderr[-800:])
     return result.stdout.strip()
+
+
+def accumulate_history(draws=None):
+    """Mantiene historical_accumulated.json (merge incremental por fecha en DATA_DIR).
+
+    El auto-pipeline sólo bajaba un snapshot (historical_data.json) y nunca
+    construía el histórico acumulado, así que en Railway quedaba en 'no existe'.
+    Este paso fusiona los día-registros recién bajados contra el acumulado y lo
+    persiste en DATA_DIR (el volumen). Idempotente y tolerante a fallos: es un
+    artefacto secundario, su error NO debe tumbar el pipeline.
+
+    draws: lista de día-registros ya parseada. Si es None, se cargan desde
+    historical_data.json (DATA_DIR→HERE). Devuelve {before, added, corrected,
+    total} o {error}.
+    """
+    try:
+        from jps_accumulate import merge_records
+        if draws is None:
+            raw = _load_data_json("historical_data.json")
+            draws = parse_draws(raw) if raw is not None else []
+        accum_path = os.path.join(DATA_DIR, "historical_accumulated.json")
+        accumulated = {}
+        if os.path.exists(accum_path):
+            try:
+                with open(accum_path, "rb") as f:
+                    raw_bytes = f.read().rstrip(b"\x00")  # tolera null bytes viejos
+                loaded = json.loads(raw_bytes.decode("utf-8")) if raw_bytes else {}
+                if isinstance(loaded, dict):
+                    accumulated = loaded
+            except Exception:
+                accumulated = {}
+        before = len(accumulated)
+        added, corrected = merge_records(accumulated, draws or [])
+        with open(accum_path, "w", encoding="utf-8") as f:
+            json.dump(accumulated, f, ensure_ascii=False, indent=2, default=str)
+        return {"before": before, "added": added, "corrected": corrected, "total": len(accumulated)}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ─── PIPELINE ──────────────────────────────────────────────────────────────────
@@ -387,6 +447,14 @@ def pipeline(params):
     STATE["draws"] = draws
     save_json(hist, "historical_data.json")
     lg(f"    ✓ {len(draws)} sorteos recibidos y guardados en historical_data.json")
+
+    # ── 1b. Acumular histórico (merge incremental persistente en DATA_DIR) ────
+    acc = accumulate_history(draws)
+    if "error" in acc:
+        lg(f"    ⚠ historical_accumulated.json no se pudo actualizar: {acc['error']}")
+    else:
+        lg(f"    ✓ Histórico acumulado: {acc['total']} días "
+           f"(+{acc['added']} nuevos · {acc['corrected']} correcciones)")
 
     # ── 2. Fetch último resultado ────────────────────────────────────────────
     lg("[2/5] Consultando último resultado...")
@@ -434,6 +502,9 @@ def pipeline(params):
     output = load_json("output.json")
     STATE["output"] = output
     lg("    ✓ Pipeline completo")
+    _log_event("analyze", "pipeline", {"n_draws": len(draws), "n_valid": total,
+                                       "rev_rate_pct": round(rev_rate * 100, 2),
+                                       "budget": budget, "n_tickets": n_tickets, "profile": profile})
 
     return {
         "ok":           True,
@@ -483,7 +554,7 @@ def _run_auto_pipeline(params):
         try:
             r = subprocess.run(
                 [sys.executable, os.path.join(HERE, "jps_reconcile.py")],
-                cwd=HERE, capture_output=True, text=True, timeout=120,
+                cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, env=_CHILD_ENV,
             )
             if r.returncode == 0:
                 STATE["auto_log"].append("[auto] ✓ reconcile ok")
@@ -491,14 +562,24 @@ def _run_auto_pipeline(params):
                 STATE["auto_log"].append(f"[auto] ⚠ reconcile rc={r.returncode}: {(r.stderr or '')[-160:]}")
         except Exception as e:
             STATE["auto_log"].append(f"[auto] ⚠ reconcile error: {e}")
+        # Reconcile de apuestas por usuario (Workstream D) — separado del bandit.
+        try:
+            from jps_reconcile_user import reconcile_users
+            n_user = reconcile_users()
+            STATE["auto_log"].append(f"[auto] ✓ user-bets reconciliadas: {n_user}")
+        except Exception as e:
+            STATE["auto_log"].append(f"[auto] ⚠ user-reconcile error: {e}")
         STATE["auto_result"] = result
         STATE["auto_status"] = "done"
         STATE["auto_started_at"] = time.time()
         STATE["auto_log"].append("[auto] ✓ Pipeline completo")
+        _log_event("server", "auto_pipeline_done", {"draws": result.get("draws"),
+                                                     "total_valid": result.get("total_valid")})
     except Exception as e:
         import traceback
         STATE["auto_status"] = "error"
         STATE["auto_log"].append(f"[auto] ✗ Error: {e}")
+        _log_event("server", "auto_pipeline_error", {"error": str(e)})
         STATE["auto_result"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-1200:]}
 
 
@@ -516,6 +597,57 @@ def trigger_auto(params):
         STATE["auto_log"] = ["[auto] En cola…"]
         threading.Thread(target=_run_auto_pipeline, args=(params,), daemon=True).start()
     return {"status": "running", "cached": False, "age": _auto_age()}
+
+
+# ─── BACKTEST ON-DEMAND (background) ───────────────────────────────────────────
+# El backtest walk-forward es pesado (varios segundos) y de ejecución bajo
+# demanda; no forma parte del pipeline automático. Se dispara desde el monitor y
+# corre en un thread para no bloquear el request. jps_backtest.py escribe
+# backtest_report.json vía el save_json de jps_edge_tool → respeta JPS_DATA_DIR.
+_BACKTEST_LOCK = threading.Lock()
+
+
+def _run_backtest_bg(params):
+    """Corre jps_backtest.py en subprocess y refleja el progreso en STATE."""
+    try:
+        budget = str(int(params.get("budget", 5000) or 5000))
+        n = str(int(params.get("n", 5) or 5))
+        STATE["backtest_status"] = "running"
+        STATE["backtest_log"] = [f"[backtest] Iniciando walk-forward 80/20 (₡{budget}, n={n})…"]
+        r = subprocess.run(
+            [sys.executable, os.path.join(HERE, "jps_backtest.py"),
+             "--budget", budget, "--n", n, "--quiet"],
+            cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=600, env=_CHILD_ENV,
+        )
+        tail = [l for l in (r.stdout or "").strip().splitlines() if l.strip()][-12:]
+        STATE["backtest_log"] += tail
+        if r.returncode == 0:
+            STATE["backtest_status"] = "done"
+            STATE["backtest_started_at"] = time.time()
+            STATE["backtest_log"].append("[backtest] ✓ Completo → backtest_report.json")
+            _log_event("backtest", "done", {"budget": budget, "n": n})
+        else:
+            STATE["backtest_status"] = "error"
+            STATE["backtest_log"].append(f"[backtest] ✗ rc={r.returncode}: {(r.stderr or '')[-300:]}")
+            _log_event("backtest", "error", {"rc": r.returncode})
+    except subprocess.TimeoutExpired:
+        STATE["backtest_status"] = "error"
+        STATE["backtest_log"].append("[backtest] ✗ timeout (>600 s)")
+    except Exception as e:
+        STATE["backtest_status"] = "error"
+        STATE["backtest_log"].append(f"[backtest] ✗ error: {e}")
+
+
+def trigger_backtest(params):
+    """Lanza el backtest en background si no hay uno corriendo. Idempotente."""
+    with _BACKTEST_LOCK:
+        if STATE.get("backtest_status") == "running":
+            return {"status": "running", "already": True}
+        STATE["backtest_status"] = "running"
+        STATE["backtest_log"] = ["[backtest] En cola…"]
+        threading.Thread(target=_run_backtest_bg, args=(params,), daemon=True).start()
+    return {"status": "running"}
 
 
 # ─── MONITOR HELPERS ───────────────────────────────────────────────────────────
@@ -707,7 +839,13 @@ def build_monitor_pipeline():
     fi.update(n_strategies=len(bt.get("strategies", {}) or {}))
     files["backtest_report"] = fi
     files["output"] = _file_info("output.json")
-    files["audit_result"] = _file_info("audit_result.json")
+    au = _load_data_json("audit_result.json") or {}
+    fi = _file_info("audit_result.json")
+    _ares = au.get("resumen", {}) if isinstance(au, dict) else {}
+    fi.update(estado=_ares.get("estado"), neto=_ares.get("neto_total"),
+              draw_date=(au.get("draw_date") if isinstance(au, dict) else None),
+              session=(au.get("session") if isinstance(au, dict) else None))
+    files["audit_result"] = fi
 
     data_ages = [files[k]["age_minutes"] for k in ("historical_accumulated", "historical_data")
                  if files[k]["exists"] and files[k]["age_minutes"] is not None]
@@ -951,6 +1089,209 @@ USERS = _parse_users()
 BASIC_AUTH_ENABLED = bool(USERS)
 
 
+# ─── IDENTIDAD DE USUARIO (Workstream C) ────────────────────────────────────────
+# El login viejo entregaba el MISMO token global a cualquier usuario → el server
+# no sabía quién actuaba. Ahora: cookie FIRMADA (HMAC) que codifica username+expiry
+# (stateless, sobrevive restarts) RESPALDADA por una tabla `sessions` en SQLite
+# (revocable/observable). current_user() resuelve identidad por request.
+try:
+    import jps_db as _db
+    _db.init_db()
+except Exception as _e:   # degradación: sin DB, se cae a Basic Auth / modo abierto
+    _db = None
+    print(f"[warn] jps_db no disponible: {_e}")
+
+
+def _session_secret():
+    """Secret para firmar cookies: env JPS_SESSION_SECRET o uno persistido en la DB
+    (así las firmas sobreviven reinicios aun sin la env var)."""
+    env = os.environ.get("JPS_SESSION_SECRET", "").strip()
+    if env:
+        return env.encode("utf-8")
+    if _db is not None:
+        try:
+            return _db.get_or_create_secret().encode("utf-8")
+        except Exception:
+            pass
+    # último recurso: token efímero del proceso (sesiones no sobreviven restart)
+    return SESSION_TOKEN.encode("utf-8")
+
+
+def _sign(payload_b64: str) -> str:
+    return hmac.new(_session_secret(), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def make_session_cookie(username, ttl_seconds=43200):
+    """Crea una sesión (fila en SQLite) y devuelve el valor de cookie firmado:
+    base64url(json{sid,u,exp}).hmac_sig"""
+    sid, expires = (None, None)
+    if _db is not None:
+        try:
+            sid, expires = _db.create_session(username, ttl_seconds=ttl_seconds)
+        except Exception:
+            sid = None
+    if sid is None:
+        # Fallback stateless si la DB no está: sid aleatorio sin registro persistente.
+        sid = secrets.token_urlsafe(24)
+        from datetime import timezone as _tz
+        expires = (datetime.now(_tz.utc) + timedelta(seconds=ttl_seconds)).isoformat()
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"sid": sid, "u": username, "exp": expires}).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+    return f"{payload}.{_sign(payload)}"
+
+
+def _user_from_signed_cookie(headers):
+    """Devuelve el username si la cookie de sesión firmada es válida (firma OK,
+    no expirada, y —si hay DB— con fila de sesión viva). Si no, None."""
+    raw = headers.get("Cookie", "")
+    token = ""
+    for part in raw.split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == SESSION_COOKIE and v:
+            token = v
+            break
+    if not token or "." not in token:
+        return None
+    payload_b64, _, sig = token.rpartition(".")
+    try:
+        if not hmac.compare_digest(sig, _sign(payload_b64)):
+            return None
+        pad = "=" * (-len(payload_b64) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload_b64 + pad).decode("utf-8"))
+    except Exception:
+        return None
+    # expiry (stateless): la cookie carga un ISO tz-aware (UTC)
+    try:
+        if datetime.fromisoformat(data["exp"]) < datetime.now(timezone.utc):
+            return None
+    except Exception:
+        return None
+    # revocación/observabilidad (stateful) — si hay DB, la fila debe seguir viva
+    if _db is not None:
+        try:
+            if _db.get_session(data.get("sid")) is None:
+                return None
+        except Exception:
+            pass
+    user = data.get("u")
+    return user if user in USERS else None
+
+
+def _user_from_basic(headers):
+    auth_header = headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        return None
+    try:
+        decoded = base64.b64decode(auth_header.split(" ", 1)[1].strip()).decode("utf-8")
+        user, _, pw = decoded.partition(":")
+        return user if _creds_ok(user, pw) else None
+    except Exception:
+        return None
+
+
+def current_user(headers):
+    """Identidad del que hace el request, o None. En modo abierto (sin JPS_USERS)
+    devuelve 'local' para que el betting module sea usable en dev sin auth."""
+    if not BASIC_AUTH_ENABLED:
+        return "local"
+    return _user_from_signed_cookie(headers) or _user_from_basic(headers)
+
+
+def _session_id_from_cookie(headers):
+    """Extrae el sid de la cookie firmada (para logout/revocación)."""
+    raw = headers.get("Cookie", "")
+    for part in raw.split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == SESSION_COOKIE and v and "." in v:
+            payload_b64 = v.rpartition(".")[0]
+            try:
+                pad = "=" * (-len(payload_b64) % 4)
+                data = json.loads(base64.urlsafe_b64decode(payload_b64 + pad).decode("utf-8"))
+                return data.get("sid")
+            except Exception:
+                return None
+    return None
+
+
+# ─── BETTING MODULE — validación (Workstream D) ─────────────────────────────────
+# Cutoffs oficiales JPS (para el registro de "sesión en vivo": minutos antes del sorteo).
+_SESSION_CUTOFF = {"manana": (12, 55), "mediaTarde": (16, 30), "tarde": (19, 30)}
+
+
+def _minutes_before_cutoff(session, draw_date):
+    try:
+        h, m = _SESSION_CUTOFF.get(session, (23, 59))
+        d = datetime.strptime(draw_date, "%Y-%m-%d")
+        cutoff = d.replace(hour=h, minute=m, second=0, microsecond=0)
+        return int((cutoff - datetime.now()).total_seconds() // 60)
+    except Exception:
+        return None
+
+
+def _validate_user_bet(payload):
+    """Valida y normaliza una apuesta de usuario. Aplica los invariantes del juego:
+    número en rango 00-99, base≥₡100 múltiplo de 100, rev 0 o múltiplo de 100,
+    rev ≤ base. El usuario puede elegir CUALQUIER número (no solo el top-25); cada
+    ticket lleva `in_top25` como marca informativa para comparar vs. el sistema.
+    Devuelve (session, draw_date, tickets, amount, rev_ratio) o ValueError."""
+    session = str(payload.get("session", "")).strip()
+    if session not in ("manana", "mediaTarde", "tarde"):
+        raise ValueError("session inválida (manana|mediaTarde|tarde)")
+    draw_date = str(payload.get("draw_date") or datetime.now().strftime("%Y-%m-%d"))[:10]
+    raw_tickets = payload.get("tickets") or []
+    if not isinstance(raw_tickets, list) or not raw_tickets:
+        raise ValueError("tickets requerido (lista no vacía)")
+    top_set = {n.get("num_str") for n in STATE.get("top25", [])}
+    tickets = []
+    seen = set()
+    for t in raw_tickets:
+        try:
+            n_int = int(str(t.get("num")).strip())
+            num = str(n_int).zfill(2)
+            base = int(t.get("base", 0)); rev = int(t.get("rev", 0))
+        except (TypeError, ValueError):
+            raise ValueError("ticket con num/base/rev inválido")
+        if not (0 <= n_int <= 99):
+            raise ValueError(f"número {t.get('num')} fuera de rango (00-99)")
+        if num in seen:
+            continue  # dedup: un número una sola vez por apuesta
+        seen.add(num)
+        if base < 100 or base % 100 != 0:
+            raise ValueError("base debe ser ≥₡100 y múltiplo de 100")
+        if rev < 0 or rev % 100 != 0:
+            raise ValueError("rev debe ser 0 o múltiplo de ₡100")
+        if rev > base:
+            raise ValueError("rev no puede superar base (rev ≤ base)")
+        tickets.append({"num": num, "base": base, "rev": rev, "in_top25": num in top_set})
+    if not tickets:
+        raise ValueError("sin tickets válidos")
+    amount = sum(t["base"] + t["rev"] for t in tickets)
+    base_sum = sum(t["base"] for t in tickets)
+    rev_ratio = round(sum(t["rev"] for t in tickets) / base_sum, 4) if base_sum else 0
+    return session, draw_date, tickets, amount, rev_ratio
+
+
+def _result_index():
+    """Índice {YYYY-MM-DD-session: draw} de resultados reales ya publicados.
+    Reusa la misma fuente de verdad que el reconcile del sistema."""
+    try:
+        from jps_reconcile import _build_results_index
+        return _build_results_index()
+    except Exception:
+        return {}
+
+
+def _bet_locked(bet, idx=None):
+    """Una apuesta queda BLOQUEADA (no editable ni eliminable) una vez que el
+    resultado de su sorteo salió, o ya fue reconciliada."""
+    if bet.get("status") == "reconciled":
+        return True
+    if idx is None:
+        idx = _result_index()
+    return f"{bet.get('draw_date')}-{bet.get('session')}" in idx
+
+
 def _creds_ok(user, pw) -> bool:
     """Valida usuario+contraseña contra el dict de usuarios (tiempo constante)."""
     if not user or user not in USERS:
@@ -992,11 +1333,11 @@ def _check_session_cookie(headers) -> bool:
 
 
 def _is_authed(headers) -> bool:
-    """Autenticado si: auth desactivado, cookie de sesión válida (login screen),
-    o cabecera Basic Auth válida (compat curl / API / healthchecks)."""
+    """Autenticado si: auth desactivado, o hay una identidad resoluble
+    (cookie de sesión firmada válida, o Basic Auth). Delega en current_user()."""
     if not BASIC_AUTH_ENABLED:
         return True
-    return _check_session_cookie(headers) or _check_basic_auth(headers)
+    return current_user(headers) is not None
 
 
 def _validate_login(user, pw) -> bool:
@@ -1121,6 +1462,8 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 with open(os.path.join(DATA_DIR, "predictions_log.jsonl"), "a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                _log_event("commit", "user_commit", {"id": pred_id, "bet_per_ticket": bet_per_ticket,
+                                                     "user": current_user(self.headers)})
                 self.send_json({"ok": True, "record": record})
 
             elif parsed.path == "/api/skip":
@@ -1136,7 +1479,71 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 with open(os.path.join(DATA_DIR, "predictions_log.jsonl"), "a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                _log_event("skip", "user_skip", {"id": pred_id, "user": current_user(self.headers)})
                 self.send_json({"ok": True, "record": record})
+
+            elif parsed.path == "/api/backtest/run":
+                # Dispara el backtest walk-forward en background y regenera
+                # backtest_report.json. No bloquea: el monitor polea /status.
+                self.send_json(trigger_backtest(payload))
+
+            elif parsed.path == "/api/user-bet":
+                # Betting module: registra la apuesta MANUAL del usuario logueado
+                # en SQLite (aislado por usuario, separado del predictions_log del
+                # sistema para no contaminar el bandit).
+                user = current_user(self.headers)
+                if not user:
+                    self.send_json({"error": "no autenticado"}, 401)
+                    return
+                if _db is None:
+                    self.send_json({"error": "DB no disponible"}, 500)
+                    return
+                try:
+                    session, draw_date, tickets, amount, rev_ratio = _validate_user_bet(payload)
+                except ValueError as ve:
+                    self.send_json({"error": str(ve)}, 400)
+                    return
+                # Lock: no se puede crear NI editar una apuesta cuyo resultado ya salió
+                # (o cuya apuesta previa ya fue reconciliada).
+                idx = _result_index()
+                existing = _db.get_user_bet(f"{draw_date}-{session}-{user}")
+                if f"{draw_date}-{session}" in idx or (existing and _bet_locked(existing, idx)):
+                    self.send_json({"error": "el resultado de esa sesión ya salió — la apuesta está cerrada"}, 403)
+                    return
+                bet_id = _db.upsert_user_bet(
+                    user, draw_date, session, tickets, amount, rev_ratio,
+                    anomalies_snapshot=payload.get("anomalies_snapshot"),
+                    architect_snapshot=payload.get("architect_snapshot"),
+                    minutes_before_cutoff=_minutes_before_cutoff(session, draw_date))
+                _log_event("user_bet", "placed", {"user": user, "draw_date": draw_date,
+                                                  "session": session, "amount": amount,
+                                                  "n_tickets": len(tickets),
+                                                  "edited": bool(existing)})
+                self.send_json({"ok": True, "bet_id": bet_id, "amount": amount,
+                                "user": user, "edited": bool(existing)})
+
+            elif parsed.path == "/api/user-bet/delete":
+                # Elimina la apuesta del usuario si aún NO salió el resultado.
+                user = current_user(self.headers)
+                if not user:
+                    self.send_json({"error": "no autenticado"}, 401)
+                    return
+                if _db is None:
+                    self.send_json({"error": "DB no disponible"}, 500)
+                    return
+                bet_id = payload.get("bet_id")
+                if not bet_id and payload.get("draw_date") and payload.get("session"):
+                    bet_id = f"{payload['draw_date']}-{payload['session']}-{user}"
+                bet = _db.get_user_bet(bet_id) if bet_id else None
+                if not bet or bet.get("username") != user:
+                    self.send_json({"error": "apuesta no encontrada"}, 404)
+                    return
+                if _bet_locked(bet):
+                    self.send_json({"error": "el resultado ya salió — la apuesta está cerrada"}, 403)
+                    return
+                deleted = _db.delete_user_bet(bet_id, user)
+                _log_event("user_bet", "deleted", {"user": user, "bet_id": bet_id})
+                self.send_json({"ok": True, "deleted": deleted})
 
             else:
                 self.send_json({"error": "Not found"}, 404)
@@ -1185,14 +1592,16 @@ class Handler(BaseHTTPRequestHandler):
         user = (data.get("user") or data.get("username") or "").strip()
         pw   = data.get("pass") or data.get("password") or ""
         if _validate_login(user, pw):
+            cookie_val = make_session_cookie(user)
             self.send_response(302)
             self.send_header(
                 "Set-Cookie",
-                f"{SESSION_COOKIE}={SESSION_TOKEN}; Path=/; HttpOnly; "
+                f"{SESSION_COOKIE}={cookie_val}; Path=/; HttpOnly; "
                 f"SameSite=Lax; Max-Age=43200",
             )
             self.send_header("Location", "/")
             self.end_headers()
+            _log_event("server", "login", {"user": user})
         else:
             self.send_response(302)
             self.send_header("Location", "/login?error=1")
@@ -1208,6 +1617,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(render_login(error=bool(params.get("error"))))
             return
         if path == "/logout":
+            # Revocar la sesión persistente (además de limpiar la cookie).
+            if _db is not None:
+                try:
+                    _db.delete_session(_session_id_from_cookie(self.headers))
+                except Exception:
+                    pass
             self.send_response(302)
             self.send_header(
                 "Set-Cookie",
@@ -1325,6 +1740,59 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(build_monitor_backtest())
             elif parsed.path == "/api/monitor/pnl":
                 self.send_json(build_monitor_pnl())
+
+            elif parsed.path == "/api/backtest/status":
+                self.send_json({
+                    "status": STATE.get("backtest_status", "idle"),
+                    "log": STATE.get("backtest_log", []),
+                    "started_at": STATE.get("backtest_started_at"),
+                    "age_minutes": (round((time.time() - STATE["backtest_started_at"]) / 60, 1)
+                                    if STATE.get("backtest_started_at") else None),
+                })
+
+            elif parsed.path == "/api/user-bets":
+                # Historial de apuestas + auditorías DEL usuario logueado (aislado).
+                user = current_user(self.headers)
+                if not user:
+                    self.send_json({"error": "no autenticado"}, 401)
+                    return
+                if _db is None:
+                    self.send_json({"error": "DB no disponible"}, 500)
+                    return
+                bets = _db.get_user_bets(user)
+                audits = _db.get_user_audits(user)
+                # Marca cuáles apuestas están cerradas (resultado salió / reconciliadas).
+                _idx = _result_index()
+                for _b in bets:
+                    _b["locked"] = _bet_locked(_b, _idx)
+                n = hits = 0
+                net = cost = 0
+                for a in audits:
+                    res = a.get("result") or {}
+                    rs = res.get("resumen", {}) or {}
+                    net += rs.get("neto_total", 0) or 0
+                    cost += rs.get("total_apostado", 0) or 0
+                    n += 1
+                    if res.get("any_hit"):
+                        hits += 1
+                self.send_json({
+                    "user": user, "bets": bets, "audits": audits,
+                    "summary": {"n_audited": n, "hits": hits, "net_total": net,
+                                "cost_total": cost,
+                                "roi_pct": round(net / cost * 100, 2) if cost else 0,
+                                "hit_rate_pct": round(hits / n * 100, 2) if n else 0},
+                })
+
+            elif parsed.path == "/api/monitor/day" or parsed.path.startswith("/api/monitor/day/"):
+                # Resumen de observabilidad del día: ?date=YYYY-MM-DD o /api/monitor/day/<fecha>.
+                date = params.get("date")
+                if not date and parsed.path.startswith("/api/monitor/day/"):
+                    date = parsed.path.rsplit("/", 1)[-1] or None
+                try:
+                    from jps_logging import summarize_day
+                    self.send_json(summarize_day(date))
+                except Exception as e:
+                    self.send_json({"error": f"logging no disponible: {e}"}, 500)
 
             else:
                 self.send_json({"error": "Not found"}, 404)
@@ -2421,7 +2889,9 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 
   <!-- Backtest leaderboard -->
   <section>
-    <div class="sec-h"><h2>Backtest · Leaderboard</h2><span class="ln"></span><span class="tag" id="bt-tag"></span></div>
+    <div class="sec-h"><h2>Backtest · Leaderboard</h2><span class="ln"></span>
+      <button class="btn" id="bt-run" title="Corre el walk-forward 80/20 y regenera backtest_report.json">▶ Correr backtest</button>
+      <span class="tag" id="bt-tag"></span></div>
     <div class="gridstat" id="bt-stats"></div>
     <div class="tbl-wrap"><table id="bt-tbl">
       <thead><tr>
@@ -2499,6 +2969,7 @@ function fileMeta(key,f){
   else if(key==='predictions_log')extra=`<b>${f.n_ids||0}</b> preds · ${f.pending||0}P/${f.reconciled||0}R`;
   else if(key==='last_result')extra=f.exacto?`exacto <b>${f.exacto}</b>${f.reventada?' · REV':''} (${f.session||''})`:`${f.date||''}`;
   else if(key==='backtest_report')extra=`<b>${f.n_strategies||0}</b> estrategias`;
+  else if(key==='audit_result'&&f.estado)extra=`<b>${f.estado}</b>${f.neto!=null?' · '+fmtC(f.neto):''}${f.draw_date?' · '+f.draw_date:''}`;
   return a+(extra?'<br>'+extra:'');
 }
 function renderPipeline(pipe){
@@ -2602,6 +3073,27 @@ function renderBacktest(bt){
 }
 $('#bt-tbl').querySelectorAll('thead th').forEach((th,idx)=>{const keys=[null,'name','profile','hit_rate_pct','roi_total_pct','mean_per_session','median','p95','max_drawdown','z_vs_baseline','p_value'];const k=keys[idx];if(!k)return;th.addEventListener('click',()=>{btSort.dir=(btSort.key===k?-btSort.dir:-1);btSort.key=k;if(btCache)renderBacktest(btCache);});});
 
+// ── Backtest run trigger (on-demand, background + polling) ─────────────────────
+let btRunPoll=null;
+async function runBacktest(){
+  const btn=$('#bt-run');if(!btn||btn.disabled)return;
+  const orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin">↻</span> Corriendo…';
+  const restore=()=>{btn.disabled=false;btn.innerHTML=orig;};
+  try{
+    const r=await fetch('/api/backtest/run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+  }catch(e){toast('No se pudo iniciar el backtest: '+e.message);restore();return;}
+  if(btRunPoll)clearInterval(btRunPoll);
+  btRunPoll=setInterval(async()=>{
+    let s;try{s=await fJSON('/api/backtest/status');}catch(e){return;}
+    if(s.status==='running')return;
+    clearInterval(btRunPoll);btRunPoll=null;restore();
+    if(s.status==='done'){$('#bt-tag').textContent='✓ backtest regenerado';loadAll();}
+    else toast('Backtest '+(s.status||'?')+': '+((s.log||[]).slice(-1)[0]||''));
+  },2500);
+}
+{const b=$('#bt-run');if(b)b.addEventListener('click',runBacktest);}
+
 // ── Strategy P&L bar ──────────────────────────────────────────────────────────
 function renderStratPnl(pnl){
   destroy('sp');const box=$('#spbox');
@@ -2682,7 +3174,8 @@ def _run_predict_sched(args):
     cmd = [sys.executable, os.path.join(HERE, "jps_predict.py")] + args
     _sched_log(f"→ predict: {' '.join(args)}")
     try:
-        r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=120)
+        r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=120, env=_CHILD_ENV)
         if r.returncode == 0:
             _sched_log(f"✓ predict ok")
         else:
@@ -2708,14 +3201,22 @@ def _run_fetch_reconcile_sched():
     try:
         r1 = subprocess.run(
             [sys.executable, os.path.join(HERE, "jps_edge_tool.py"), "fetch", "--mode", "history", "--days", "180"],
-            cwd=HERE, capture_output=True, text=True, timeout=120,
+            cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, env=_CHILD_ENV,
         )
         if r1.returncode != 0:
             _sched_log(f"✗ fetch failed: {r1.stderr[-200:]}")
             return
+        # Acumular el histórico recién bajado en historical_accumulated.json —
+        # mismo paso que el auto-pipeline, para que el volumen quede al día
+        # aunque nadie abra el dashboard entre sorteos.
+        acc = accumulate_history()
+        if "error" in acc:
+            _sched_log(f"⚠ accumulate: {acc['error']}")
+        else:
+            _sched_log(f"✓ accumulate: {acc['total']} días (+{acc['added']} nuevos)")
         r2 = subprocess.run(
             [sys.executable, os.path.join(HERE, "jps_reconcile.py")],
-            cwd=HERE, capture_output=True, text=True, timeout=120,
+            cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, env=_CHILD_ENV,
         )
         if r2.returncode == 0:
             # extract última línea útil del stdout
@@ -2724,6 +3225,13 @@ def _run_fetch_reconcile_sched():
             _sched_log("✓ reconcile ok")
             for l in tail:
                 _sched_log(f"    {l}")
+            # Reconcile de apuestas por usuario (separado del bandit del sistema).
+            try:
+                from jps_reconcile_user import reconcile_users
+                n_user = reconcile_users()
+                _sched_log(f"✓ user-bets reconciliadas: {n_user}")
+            except Exception as e:
+                _sched_log(f"⚠ user-reconcile error: {e}")
         else:
             _sched_log(f"✗ reconcile failed: {r2.stderr[-200:]}")
     except subprocess.TimeoutExpired:
